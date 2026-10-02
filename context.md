@@ -105,7 +105,7 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - **Cross-references:** 95 internal references don't resolve exactly.
 - **Templated table questions copy the row text,** which inflates table retrieval scores until they're reworded in review.
 - **Amendment questions name a provision number;** dense retrieval can't match on numbers (expected; v3 fixes this).
-- **Git:** nothing committed yet (ask the user first).
+- **Git:** public repo https://github.com/SWAYAM1310/income-tax-act-2025-navigator (branch `main`). The `gh` CLI is at `C:\Program Files\GitHub CLI\gh.exe`, logged in as SWAYAM1310. Ask before committing or pushing.
 
 ## Environment gotchas
 - Windows + Git Bash. For heredoc-Python file patches, use raw strings (`\b` becomes a backspace) and no backslash line continuations; prefer the Edit tool. Run `ruff check src tests evals tasks.py` after patches.
