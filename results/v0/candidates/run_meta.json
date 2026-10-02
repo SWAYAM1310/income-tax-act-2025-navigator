@@ -1,0 +1,23 @@
+{
+  "version": "v0",
+  "split": "candidates",
+  "config": {
+    "description": "Naive baseline - raw page text, fixed 512-token chunks, dense only",
+    "chunks": "v0",
+    "retrieval": {
+      "mode": "dense",
+      "k": 10
+    },
+    "evidence_budget": 4500,
+    "generation": {
+      "prompt": "basic"
+    }
+  },
+  "n_questions": 222,
+  "n_completed": 222,
+  "retrieval_only": true,
+  "answer_model": null,
+  "timestamp": "2026-10-02T15:42:06+00:00",
+  "jina_tokens_billed": 2585,
+  "incomplete": null
+}

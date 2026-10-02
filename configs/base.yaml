@@ -1,0 +1,40 @@
+source:
+  pdf_path: Income-tax-Act-2025.pdf
+  # sha256 of the official PDF this parser was built against; ingestion refuses other files
+  sha256: 7db7feb6fa5493c74febd1548020f126acb837e874677c4f889545aff958f8b7
+  pages: 666
+
+paths:
+  parsed_dir: data/parsed
+  cache_dir: .cache
+  results_dir: results
+
+db:
+  host: ${POSTGRES_HOST:localhost}
+  port: ${POSTGRES_PORT:5433}
+  user: ${POSTGRES_USER:statnav}
+  password: ${POSTGRES_PASSWORD:statnav}
+  dbname: ${POSTGRES_DB:statnav}
+
+jina:
+  api_key: ${JINA_API_KEY:}
+  base_url: https://api.jina.ai/v1
+  # free tier: 100 requests/min, 100K tokens/min; stay a little under both
+  requests_per_minute: 90
+  tokens_per_minute: 90000
+  timeout_seconds: 60
+  # runs estimated above this many tokens stop and ask before spending
+  confirm_above_tokens: 1000000
+
+embeddings:
+  provider: jina
+  model: jina-embeddings-v5-text-small
+  dimensions: 1024
+  batch_size: 64
+  passage_task: retrieval.passage
+  query_task: retrieval.query
+
+reranker:
+  provider: jina
+  model: jina-reranker-v3.5
+  candidates: 20

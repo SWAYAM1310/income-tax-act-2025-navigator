@@ -1,0 +1,19 @@
+# LLM providers and per-role model choices. Swap a role's model here; code reads roles only.
+providers:
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    api_key_env: GROQ_API_KEY
+    # free tier, per model: 30 requests/min, 8K tokens/min, 200K tokens/day
+    requests_per_minute: 28
+    tokens_per_minute: 7500
+    tokens_per_day: 195000
+    timeout_seconds: 120
+
+roles:
+  answer:   {provider: groq, model: openai/gpt-oss-120b, max_tokens: 1500, reasoning_effort: low}
+  classify: {provider: groq, model: openai/gpt-oss-20b,  max_tokens: 400,  reasoning_effort: low}
+  verify:   {provider: groq, model: openai/gpt-oss-20b,  max_tokens: 800,  reasoning_effort: low}
+
+# Paid-tier list prices (USD per 1M tokens), used only to report what a run would cost.
+# Left empty until verified from the providers' pricing pages; reports then show tokens only.
+list_prices: {}

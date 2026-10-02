@@ -1,0 +1,7 @@
+# Upper bound: the gold provisions are handed to the generator directly (no retrieval).
+# Measures how much error is left when retrieval is perfect.
+description: Oracle context - gold provisions given directly (generation upper bound)
+chunks: oracle
+retrieval: {mode: oracle}
+evidence_budget: 4500
+generation: {prompt: basic}

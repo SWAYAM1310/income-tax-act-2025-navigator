@@ -1,0 +1,16 @@
+# The 13 formulas the PDF renders as images (no text layer). Hand-transcribed from the page
+# images on 2026-10-02; each is injected after the text line that precedes it on the page.
+# bbox = image rectangle in PDF points [x0, y0, x1, y1].
+- {page: 5, bbox: [272.7, 145.4, 323.1, 169.3], text: "N = K × (L / M)"}
+- {page: 32, bbox: [336.9, 397.9, 412.7, 419.1], text: "Amount = 1/2 × (A × B)"}
+- {page: 56, bbox: [281.2, 268.0, 315.1, 291.3], text: "A × (B / C)"}
+- {page: 88, bbox: [65.8, 148.1, 89.7, 168.2], text: "(A × B) / C"}
+- {page: 88, bbox: [65.8, 185.2, 92.3, 210.7], text: "(A × D) / C"}
+- {page: 102, bbox: [422.8, 535.8, 505.0, 578.8], text: "X = (A × B) / C"}
+- {page: 103, bbox: [429.2, 75.9, 498.6, 113.6], text: "X = (A × B) / C"}
+- {page: 131, bbox: [264.2, 298.2, 332.1, 332.1], text: "A = B × (C / D)"}
+- {page: 275, bbox: [55.2, 183.6, 123.1, 217.6], text: "D = A × B / (B + C)"}
+- {page: 275, bbox: [55.2, 218.6, 123.1, 252.6], text: "E = A × C / (B + C)"}
+- {page: 275, bbox: [55.2, 373.5, 123.1, 407.5], text: "A = B × (C / D)"}
+- {page: 275, bbox: [55.2, 505.1, 123.1, 539.0], text: "E = F × G / I"}
+- {page: 364, bbox: [55.2, 233.5, 123.1, 267.4], text: "(A / B) × C"}

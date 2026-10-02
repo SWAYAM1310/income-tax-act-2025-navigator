@@ -1,0 +1,21 @@
+# Source PDF is large (107 MB); verified by checksum in configs/base.yaml
+*.pdf
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Secrets
+.env
+
+# Generated artefacts (parsed output, embeddings, LLM response cache)
+data/
+.cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

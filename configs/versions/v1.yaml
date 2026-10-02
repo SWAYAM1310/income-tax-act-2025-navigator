@@ -1,0 +1,6 @@
+# v1: same windows over cleaned text (running header/footer removed, endnotes separated).
+description: Header/footer removal and footnote separation
+chunks: v1
+retrieval: {mode: dense, k: 10}
+evidence_budget: 4500
+generation: {prompt: basic}

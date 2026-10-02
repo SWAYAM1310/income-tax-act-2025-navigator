@@ -1,0 +1,6 @@
+# v2: one chunk per provision subtree / table row, with section + chapter breadcrumbs.
+description: Hierarchy-aware chunks with provision metadata
+chunks: v2
+retrieval: {mode: dense, k: 10}
+evidence_budget: 4500
+generation: {prompt: basic}

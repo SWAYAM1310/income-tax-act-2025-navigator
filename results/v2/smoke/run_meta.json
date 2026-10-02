@@ -1,0 +1,23 @@
+{
+  "version": "v2",
+  "split": "smoke",
+  "config": {
+    "description": "Hierarchy-aware chunks with provision metadata",
+    "chunks": "v2",
+    "retrieval": {
+      "mode": "dense",
+      "k": 10
+    },
+    "evidence_budget": 4500,
+    "generation": {
+      "prompt": "basic"
+    }
+  },
+  "n_questions": 6,
+  "n_completed": 6,
+  "retrieval_only": false,
+  "answer_model": "openai/gpt-oss-120b",
+  "timestamp": "2026-10-02T15:40:23+00:00",
+  "jina_tokens_billed": 0,
+  "incomplete": null
+}

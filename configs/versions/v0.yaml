@@ -1,0 +1,7 @@
+# v0: naive baseline. Raw PyMuPDF page text (headers, footers, endnotes left in), fixed
+# 512-token windows, dense retrieval only, one generation call.
+description: Naive baseline - raw page text, fixed 512-token chunks, dense only
+chunks: v0
+retrieval: {mode: dense, k: 10}
+evidence_budget: 4500
+generation: {prompt: basic}
