@@ -94,11 +94,33 @@ def rebuild_golden() -> int:
     return len(accepted)
 
 
+def bulk_accept(reviewer: str, kind: str | None) -> int:
+    """Accept every unverified candidate without per-item review, on the reviewer's explicit
+    instruction. Logged as 'bulk-accept' so the dataset's provenance stays visible."""
+    cands = read_jsonl(CANDIDATES)
+    n = 0
+    for c in cands:
+        if c["status"] == "unverified" and (not kind or c["type"] == kind):
+            before = dict(c)
+            c["status"] = "accepted"
+            _log(reviewer, before, c, "bulk-accept (user instruction)")
+            n += 1
+    write_jsonl(CANDIDATES, cands)
+    rebuild_golden()
+    return n
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--type")
     ap.add_argument("--reviewer", default="reviewer")
+    ap.add_argument("--accept-all", action="store_true",
+                    help="accept all unverified candidates without per-item review (logged)")
     a = ap.parse_args()
+    if a.accept_all:
+        n = bulk_accept(a.reviewer, a.type)
+        print(f"bulk-accepted {n}; golden set now has {rebuild_golden()} questions")
+        return
     cands = read_jsonl(CANDIDATES)
     todo = [c for c in cands if c["status"] == "unverified" and (not a.type or c["type"] == a.type)]
     print(f"{len(todo)} candidates to review "

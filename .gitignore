@@ -13,7 +13,7 @@ __pycache__/
 .env
 
 # Generated artefacts (parsed output, embeddings, LLM response cache)
-data/
+/data/
 .cache/
 
 # Frontend
