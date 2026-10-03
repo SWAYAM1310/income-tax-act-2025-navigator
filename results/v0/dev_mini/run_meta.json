@@ -1,0 +1,23 @@
+{
+  "version": "v0",
+  "split": "dev_mini",
+  "config": {
+    "description": "Naive baseline - raw page text, fixed 512-token chunks, dense only",
+    "chunks": "v0",
+    "retrieval": {
+      "mode": "dense",
+      "k": 10
+    },
+    "evidence_budget": 4500,
+    "generation": {
+      "prompt": "basic"
+    }
+  },
+  "n_questions": 30,
+  "n_completed": 30,
+  "retrieval_only": false,
+  "answer_model": "openai/gpt-oss-120b",
+  "timestamp": "2026-10-03T05:48:00+00:00",
+  "jina_tokens_billed": 0,
+  "incomplete": null
+}

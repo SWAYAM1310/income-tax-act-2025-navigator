@@ -1,0 +1,69 @@
+{
+  "n": 30,
+  "all_facts": 0.6667,
+  "all_facts_exact": 0.5417,
+  "amendment_type": 0.6667,
+  "citation_precision": 1.0,
+  "citation_recall": 0.9167,
+  "fact_recall": 0.7778,
+  "fact_recall_exact": 0.6319,
+  "grounded_numbers": 0.925,
+  "prior_text_f1": 0.5939,
+  "table_exact": 0.6667,
+  "refusal_precision": 1.0,
+  "refusal_recall": 0.8333,
+  "by_type": {
+    "amendment": {
+      "n": 6,
+      "all_facts": 0.6667,
+      "all_facts_exact": 0.6667,
+      "amendment_type": 0.6667,
+      "citation_precision": 1.0,
+      "citation_recall": 1.0,
+      "fact_recall": 0.75,
+      "fact_recall_exact": 0.75,
+      "grounded_numbers": 1.0,
+      "prior_text_f1": 0.5939
+    },
+    "lookup": {
+      "n": 6,
+      "all_facts": 1.0,
+      "all_facts_exact": 0.8333,
+      "citation_precision": 1.0,
+      "citation_recall": 1.0,
+      "fact_recall": 1.0,
+      "fact_recall_exact": 0.8333,
+      "grounded_numbers": 1.0
+    },
+    "multi_hop": {
+      "n": 6,
+      "all_facts": 0.3333,
+      "all_facts_exact": 0.0,
+      "citation_precision": 1.0,
+      "citation_recall": 0.6667,
+      "fact_recall": 0.5833,
+      "fact_recall_exact": 0.1667,
+      "grounded_numbers": 1.0
+    },
+    "refusal": {
+      "n": 6
+    },
+    "table": {
+      "n": 6,
+      "all_facts": 0.6667,
+      "all_facts_exact": 0.6667,
+      "citation_precision": 1.0,
+      "citation_recall": 1.0,
+      "fact_recall": 0.7778,
+      "fact_recall_exact": 0.7778,
+      "grounded_numbers": 0.7,
+      "table_exact": 0.6667
+    }
+  },
+  "latency_p50_s": 0.92,
+  "latency_p95_s": 1.35,
+  "llm_tokens_mean": 920.1,
+  "jina_tokens_mean": 0,
+  "evidence_tokens_mean": 459.7,
+  "incomplete": null
+}

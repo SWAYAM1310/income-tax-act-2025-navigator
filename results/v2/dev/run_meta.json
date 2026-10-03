@@ -1,0 +1,23 @@
+{
+  "version": "v2",
+  "split": "dev",
+  "config": {
+    "description": "Hierarchy-aware chunks with provision metadata",
+    "chunks": "v2",
+    "retrieval": {
+      "mode": "dense",
+      "k": 10
+    },
+    "evidence_budget": 4500,
+    "generation": {
+      "prompt": "basic"
+    }
+  },
+  "n_questions": 138,
+  "n_completed": 138,
+  "retrieval_only": true,
+  "answer_model": null,
+  "timestamp": "2026-10-03T05:34:50+00:00",
+  "jina_tokens_billed": 0,
+  "incomplete": null
+}

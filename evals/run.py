@@ -21,6 +21,7 @@ from evals.common import (
     GOLDEN,
     RESULTS_DIR,
     SPLITS_DIR,
+    artefacts,
     cite,
     descendants,
     read_jsonl,
@@ -69,6 +70,12 @@ def oracle_hits(q: dict, budget: int) -> list[dict]:
     hits, used = [], 0
     for gid in gold_targets(q):
         text = f"{cite(gid)}: {subtree_text(gid)}"
+        # the amendment endnotes linked to this subtree are part of the gold context
+        nodes = set(descendants(gid))
+        for a in artefacts()["amendments"]:
+            if nodes & set(a.get("linked_nodes") or []):
+                note = " ".join(x for x in (a["header"], a.get("prior_text")) if x)
+                text += f"\nEndnote {a['label']}: {note}"
         piece = tokens.decode(tokens.encode(text)[: max(0, budget - used)])
         if not piece:
             break
@@ -101,6 +108,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
     questions = load_questions(split, final)[:limit]
     mode = cfg["retrieval"]["mode"]
     budget = cfg["evidence_budget"]
+    distractor_k = load_yaml(CONFIG_DIR / "versions" / "v2.yaml")["retrieval"]["k"]
 
     from statnav.embed.jina import JinaClient
     from statnav.index.db import connect
@@ -113,6 +121,9 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
         from statnav.llm.client import ChatClient
         llm = ChatClient.for_role("answer")
 
+    prev_path = RESULTS_DIR / version / split / "outputs.jsonl"
+    prev_latency = ({r["id"]: r.get("latency_s") for r in read_jsonl(prev_path)}
+                    if prev_path.exists() else {})
     records, incomplete = [], None
     for n, q in enumerate(questions, 1):
         rec: dict = {"id": q["id"], "type": q["type"], "question": q["question"], "metrics": {}}
@@ -122,8 +133,8 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
         else:
             # refusals in oracle mode still see realistic (v2) passages as distractors
             chunk_version = cfg["chunks"] if mode != "oracle" else "v2"
-            found = knn(conn, jina.embed_query(q["question"]), chunk_version,
-                        cfg["retrieval"]["k"])
+            k = cfg["retrieval"]["k"] if mode != "oracle" else distractor_k
+            found = knn(conn, jina.embed_query(q["question"]), chunk_version, k)
             hits = [{"chunk_id": h.chunk_id, "text": h.text, "tokens": h.tokens,
                      "provisions": h.meta.get("provisions", []), "page_start": h.page_start,
                      "page_end": h.page_end, "score": round(h.score, 4)} for h in found]
@@ -142,8 +153,10 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
                                   {"role": "user", "content": user_prompt(q["question"],
                                                                           evidence)}],
                                  json_mode=True)
-                # provider latency only (rate-limit waits excluded); None when served from cache
-                rec["latency_s"] = None if reply.cached else round(reply.latency_s, 2)
+                # provider latency only (rate-limit waits excluded); a cached reply keeps the
+                # latency measured when it was first generated, if an earlier run recorded it
+                rec["latency_s"] = (prev_latency.get(q["id"]) if reply.cached
+                                    else round(reply.latency_s, 2))
                 rec["llm_tokens"] = reply.usage.get("total_tokens")
                 try:
                     out = reply.json()

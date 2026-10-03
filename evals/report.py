@@ -40,6 +40,9 @@ def markdown(rows: list[tuple[str, dict, dict]]) -> str:
     for v, m, meta in rows:
         desc = load_yaml(CONFIG_DIR / "versions" / f"{v}.yaml").get("description", "")
         mode = " (retrieval only)" if meta.get("retrieval_only") else ""
+        if meta.get("incomplete"):
+            mode += (f" **(incomplete: {meta.get('n_completed')}/{meta.get('n_questions')};"
+                     " not comparable)**")
         cells = []
         for key, _ in COLUMNS:
             val = m.get(key)

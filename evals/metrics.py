@@ -72,6 +72,43 @@ def token_f1(pred: str, gold: str) -> float:
     return 2 * prec * rec / (prec + rec)
 
 
+_STOP_WORDS = ("a an the of to in on for by or and is are be been being as at from with that "
+               "which this such any its it his her their under shall may")
+_NUMBER_WORDS = ("one two three four five six seven eight nine ten eleven twelve fifteen twenty "
+                 "thirty forty fifty sixty seventy eighty ninety hundred thousand lakh crore")
+STOPWORDS = frozenset(_STOP_WORDS.split())
+_NUMERALS = frozenset(_NUMBER_WORDS.split())
+FACT_COVERAGE = 0.8
+
+
+def _stem(t: str) -> str:
+    for suf in ("ing", "ed", "es", "s", "ly"):
+        if len(t) > len(suf) + 3 and t.endswith(suf):
+            return t[: -len(suf)]
+    return t
+
+
+def _content(text: str) -> list[str]:
+    toks = (t.strip(".") for t in re.findall(r"[\w%.]+", norm(text)))
+    return [_stem(t) for t in toks if t and t not in STOPWORDS]
+
+
+def fact_match(answer: str, fact: str) -> bool:
+    """Exact (normalised) containment, or soft: >= 80% of the fact's content words appear in
+    the answer and every number in the fact appears exactly. Tolerates paraphrase such as
+    'up to thirty days' vs 'not exceeding thirty days' without letting wrong numbers pass."""
+    if contains(answer, fact):
+        return True
+    words = _content(fact)
+    if not words:
+        return False
+    have = set(_content(answer))
+    is_num = [any(ch.isdigit() for ch in w) or w in _NUMERALS for w in words]
+    if any(n and w not in have for w, n in zip(words, is_num, strict=True)):
+        return False
+    return sum(w in have for w in words) / len(words) >= FACT_COVERAGE
+
+
 def generation_metrics(q: dict, out: dict, cited_chunks: list[dict]) -> dict:
     """out: {"answer", "refused"}; cited_chunks: [{"provisions": [...], "text": ...}]."""
     answer = out.get("answer") or ""
@@ -81,8 +118,12 @@ def generation_metrics(q: dict, out: dict, cited_chunks: list[dict]) -> dict:
         return m
     facts = q["gold_facts"]
     if facts:
-        m["fact_recall"] = sum(contains(answer, f) for f in facts) / len(facts)
-        m["all_facts"] = float(all(contains(answer, f) for f in facts))
+        exact = [contains(answer, f) for f in facts]
+        soft = [fact_match(answer, f) for f in facts]
+        m["fact_recall"] = sum(soft) / len(facts)
+        m["all_facts"] = float(all(soft))
+        m["fact_recall_exact"] = sum(exact) / len(facts)
+        m["all_facts_exact"] = float(all(exact))
     gold = gold_targets(q)
     if cited_chunks:
         good = [c for c in cited_chunks if any(covered(c["provisions"], g) for g in gold)]
@@ -97,7 +138,7 @@ def generation_metrics(q: dict, out: dict, cited_chunks: list[dict]) -> dict:
         cited_text = " ".join(c["text"] for c in cited_chunks)
         m["grounded_numbers"] = sum(contains(cited_text, n) for n in nums) / len(nums)
     if q["type"] == "table":
-        m["table_exact"] = m.get("all_facts", 0.0)
+        m["table_exact"] = m.get("all_facts_exact", 0.0)  # tables stay strict
     if q["type"] == "amendment" and q.get("gold_amendment"):
         ga = q["gold_amendment"]
         m["amendment_type"] = float(any(s in answer.lower() for s in TYPE_STEMS[ga["type"]]))

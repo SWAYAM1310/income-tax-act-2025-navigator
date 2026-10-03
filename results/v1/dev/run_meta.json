@@ -1,0 +1,23 @@
+{
+  "version": "v1",
+  "split": "dev",
+  "config": {
+    "description": "Header/footer removal and footnote separation",
+    "chunks": "v1",
+    "retrieval": {
+      "mode": "dense",
+      "k": 10
+    },
+    "evidence_budget": 4500,
+    "generation": {
+      "prompt": "basic"
+    }
+  },
+  "n_questions": 138,
+  "n_completed": 138,
+  "retrieval_only": true,
+  "answer_model": null,
+  "timestamp": "2026-10-03T05:34:41+00:00",
+  "jina_tokens_billed": 0,
+  "incomplete": null
+}
