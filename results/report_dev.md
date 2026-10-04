@@ -4,3 +4,4 @@
 | v1 | Header/footer removal and footnote separation (retrieval only) | 138 | 0.472 | 0.391 | — | — | — | — | — | — | — |
 | v2 | Hierarchy-aware chunks with provision metadata (retrieval only) | 138 | 0.589 | 0.578 | — | — | — | — | — | — | — |
 | v3 | Hybrid retrieval - dense + exact provision-id lookup, fused with RRF (retrieval only) | 138 | 0.879 | 0.882 | — | — | — | — | — | — | — |
+| v5 | Hybrid retrieval + endnotes + one-hop cross-reference expansion (retrieval only) | 138 | 0.923 | 0.882 | — | — | — | — | — | — | — |

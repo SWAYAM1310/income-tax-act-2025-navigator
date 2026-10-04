@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-04. **Phases 0–4 are all DONE** and committed/pushed to `main`. The eval ladder through v2 is written up in `results/ladder.md`. There is now also a **working interactive chatbot** (`python -m statnav.chat`) sharing the eval harness's exact generation path. **Phase 5 (v3 hybrid retrieval) is DONE for retrieval** -- amendment recall@5 went 0.061 to 1.000 and overall MRR 0.578 to 0.882 on dev, at zero API cost. No reranker (dropped as billable; not needed). **v4 (amendment endnotes in the evidence) is built and structurally verified; its end-to-end numbers are pending on Groq's per-minute rate limit, not on budget.** Update this file at the end of every session or phase._
+_Last updated: 2026-10-04. **Phases 0-5 are DONE, and the retrieval ladder is built through v5** (v3 hybrid ids, v4 amendment endnotes, v5 cross-reference expansion); dev retrieval recall@5 is 0.923. **End-to-end (Groq) numbers for v3/v4/v5 are still pending** (see Next steps 1). A working chatbot exists (`python -m statnav.chat`). Update this file at the end of every session or phase._
 
 > **Resume here:** see "Next steps" step 1. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding).
 
@@ -134,6 +134,19 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
   - Ladder numbering deviates from the plan deliberately: the plan has v4 as cross-reference
     expansion and v6 as amendment linking, but measurement showed endnotes, not
     cross-references, are what block amendment answers.
+- **v5, one-hop cross-reference expansion — retrieval DONE (2026-10-04, uncommitted).**
+  - `hybrid.xref_hits` takes the top 3 fused hits' provisions, follows `cross_refs` in both
+    directions, and orders the neighbouring chunks by embedding similarity; `hybrid.slot_merge`
+    keeps the top 4 untouched and gives places 5-6 to them. Config `configs/versions/v5.yaml`
+    (cumulative: includes v4's endnotes).
+  - Dev (n = 138), v5 vs v3: recall@5 0.879 -> **0.923**, recall@10 0.903 -> 0.944, MRR and hit@1
+    unchanged (0.882 / 0.831). Multi-hop recall@5 0.656 -> **0.828**; lookup, table and amendment
+    unchanged. Zero API cost.
+  - Pre-check: 19 of the 20 multi-hop misses were one cross-reference hop from a v3 top-5 hit.
+  - RRF-fusing the expansion wrecked ranking (lookup hit@1 0.771 -> 0.457), hence the slot merge.
+    keep 3 + 2 scored multi-hop 0.859 but dropped table recall@5 0.958 -> 0.917 (one question),
+    so keep 4 + 2 was chosen. ~20 settings were tried on dev, so expect a smaller gain on test.
+  - Not yet run end-to-end (Groq). v3 is at 16/30 and v4 not started, so queue v5 last.
 - Earlier Phase 3 notes:
   - **222 candidates** in `evals/data/candidates.jsonl`: lookup 54 (32 templated definitions + 22 LLM-drafted numeric), table 45, amendment 48, multi-hop 45 (LLM-drafted from cross-reference pairs), refusal 30. Drafting used ~40K gpt-oss-20b tokens.
   - **All 222 accepted into `evals/data/golden.jsonl`.** The user reviewed 2 individually and then explicitly instructed bulk acceptance of the other 220 (2026-10-02). These are logged as `bulk-accept (user instruction)` in `verification_log.csv`. They were not individually edited, so the README must say the questions were spot-checked, not individually verified.
@@ -207,30 +220,30 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
-1. **Finish v3 end-to-end on dev_mini**, then report and write up the v3 row in
-   `results/ladder.md`. Retrieval on dev is already done and reportable (recall@5 0.879).
+1. **Run the end-to-end evals for v3, v4 and v5 on dev_mini (deferred by the user on
+   2026-10-04; do it after ~06:00 UTC, when Groq's rolling 24-hour window has freed up).**
+   State when stopped: v3 19/30 (partial, flagged incomplete), v4 and v5 not started. v4 and v5
+   have only been checked structurally (v4's endnote reaches the rank-1 passage for s99(2)).
    ```
-   .venv/Scripts/python.exe -m evals.run --version v3 --split dev_mini   # resumes from cache
+   VERSIONS="v3 v4 v5" bash scripts/e2e_queue.sh        # resumes from cache; ~170K tokens total
    .venv/Scripts/python.exe -m evals.report --split dev_mini
    ```
-   - **Groq's per-minute limit, not the daily cap, is what truncates these runs.** A dev_mini
-     run completes ~6 questions then gets a provider 429 with a 400-900s backoff, while the
-     daily ledger is nowhere near 200K. Re-run it repeatedly: answers are cached, so each pass
-     resumes and adds a few more. Only trust a run whose `run_meta.json` has
-     `n_completed == n_questions` and no `incomplete` field.
-2. **Attach linked amendment endnotes to retrieved provisions (free, pure Postgres).** This is
-   the real next win and the prerequisite for amendment *answers*. v3 now ranks the right
-   provision first for every amendment question, yet still refuses, because the chunk carries
-   only the `[...]` brackets while the endnote (`type`, `amending_act`, `prior_text`) sits
-   unused in the `amendments` / `amendment_links` tables. The oracle is given those endnotes and
-   reaches amendment type 0.667 against v2's 0.167. Planned as v6; worth pulling forward, since
-   more retrieval work cannot fix this.
-3. **Phases 6–11 per the plan:** LangGraph agent with cross-reference expansion (targets
-   multi-hop, 0.656), table/amendment routing, citation verifier, MCP + FastAPI, Vite frontend,
-   CI + README.
-4. Consider a prompt step that makes table answers report **every** field of a cited row: the
-   model retrieves the right row and faithfully reports the rate but drops the threshold. Keep
-   it as its own ladder version so it is not confounded with a retrieval change.
+   Then fill the v3/v4/v5 rows into the end-to-end table in `results/ladder.md`. **The question
+   to answer: does v4's endnote attachment turn v3's perfect amendment retrieval into correct
+   amendment answers (amendment type was 0.167 for v2, 0.667 for the oracle)?** Also watch table
+   questions, which gain +648 evidence tokens from v4 and probably do not need them. Only trust
+   a row whose `run_meta.json` has `n_completed == n_questions` and no `incomplete` field.
+2. **Phases 7–11 per the plan** (the retrieval ladder through v5 is built; v4 endnotes and v5
+   cross-reference expansion are done): LangGraph agent with table/amendment routing and a
+   citation verifier, MCP + FastAPI, Vite frontend, CI + README. The chat already works
+   (`python -m statnav.chat`, default v5), so a web UI over `statnav.answer.Answerer` can start
+   without waiting on the agent.
+3. Consider a prompt step that makes table answers report **every** field of a cited row: the
+   model retrieves the right row and faithfully reports the rate but drops the threshold
+   (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`). Keep it as its own ladder version so it is not
+   confounded with a retrieval change.
+4. Optional: FTS (`retrievers: [dense, fts, ids, under]`) lifted multi-hop on dev but cost
+   lookup; revisit only if multi-hop is still weak after the end-to-end numbers.
 5. Optional: reword the templated table questions in **dev** that copy row text, since they
    inflate table scores. The test split is frozen, so it can't change.
 
@@ -248,14 +261,17 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - **Table answers drop fields they already retrieved.** The model returns the right row but omits a second column (e.g. the Rs. 20,000 threshold on `s393:tbl1#1(i)`). This is a generation gap, not retrieval — a prompt change is the fix, and it should be a *separate* ladder step so it isn't confounded with v3's retrieval changes.
 - **The per-minute rate limiter is in-process only.** The daily ledger is shared in `.cache/llm.sqlite`, but the 8K tokens/min window lives in each `ChatClient`. So running the chat right after an eval run triggers real provider 429s (`QuotaExhausted: provider says retry after ...`, seen up to ~1000s) even with the daily cap nowhere near. Leave a few minutes between an eval run and interactive use, or persist the window.
 - **Citation parsing is case-sensitive:** a lowercase `"c1"` from the model is silently dropped. Pinned by `tests/test_answer.py::test_parse_citations_is_case_sensitive_today`, because widening it would move the committed citation scores. Revisit when a version changes the prompt.
-- **Groq's per-minute limit, not the daily cap, is the real throughput constraint.** A dev_mini
-  end-to-end run completes ~6 questions and then gets a provider 429 with a 200-900s
-  `Retry-After`, while the daily ledger sits far below the 200K cap (60K when this was hit). A
-  429'd call appears to count against the window, so eager retries keep extending it: sleep the
-  provider's own reported retry-after plus a margin. `llm/client.py` raises `QuotaExhausted` for
-  a provider 429 as well as for the daily cap, so the two look the same in `run_meta.json` --
-  check the message to tell them apart. Budget a dev_mini end-to-end run as **hours of
-  wall-clock, not tokens**.
+- **Groq throttling is almost certainly a rolling 24-hour token window, not a per-minute limit
+  (hypothesis, 2026-10-04; the 429 body was not captured).** Evidence: a direct request was
+  accepted while the same run was being 429'd with 11-15 minute `Retry-After`s; the response
+  headers showed ~7,900 of 8,000 per-minute tokens and 982 of 1,000 requests free; and the
+  backoffs are the 10-15 minute size you would expect while yesterday's ~194K tokens age out of
+  the window. Consequence: a dev_mini run advances ~2 answers per 15 minutes until yesterday's
+  spend leaves the window (about 03:00-06:00 UTC the next day), then the full allowance returns.
+  Plan for **v3 + v4 + v5 end-to-end (~170K tokens) to take ~12 hours of wall clock**.
+  `llm/client.py` treats any `Retry-After` over 120s as `QuotaExhausted`, so a rolling-window
+  wait and the true daily cap look the same in `run_meta.json`. Sleep the reported retry-after
+  plus a margin between passes (`scripts/e2e_queue.sh` does); eager retries do not help.
 - **Git:** public repo https://github.com/SWAYAM1310/income-tax-act-2025-navigator (branch `main`). The `gh` CLI is at `C:\Program Files\GitHub CLI\gh.exe`, logged in as SWAYAM1310. Ask before committing or pushing.
 
 ## Environment gotchas

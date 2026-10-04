@@ -29,6 +29,7 @@ def retrieve(conn: psycopg.Connection, jina: JinaClient, question: str, cfg: dic
             pool=r.get("pool", 30),
             retrievers=r.get("retrievers", ()),
             weights=r.get("weights"),
+            xref=r.get("xref"),
         )
     else:
         raise ValueError(f"retrieval mode {mode!r} has no chat/eval path")

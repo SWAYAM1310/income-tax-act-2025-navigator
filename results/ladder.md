@@ -104,6 +104,49 @@ Per type, recall@5 / MRR / hit@1:
 - The whole phase cost **0 API tokens**: dev query embeddings were already cached, and the id
   lookups are pure Postgres.
 
+## Phase 6: v4 (amendment endnotes) and v5 (cross-reference expansion)
+
+Numbering departs from the plan on purpose: measurement showed endnotes, not cross-references,
+were what blocked amendment *answers*, so amendment linking came before cross-reference expansion.
+
+- **v4** appends each retrieved chunk's linked amendment endnotes to its text
+  (`statnav/retrieve/amend.py`). v3 ranked `v2:s99(2)` first for "How was section 99(2) amended?"
+  and still refused, because the chunk carries only the `[...]` brackets and the change sits in
+  the endnote. Retrieval metrics are identical to v3 by construction; the effect is on answers
+  (end-to-end numbers: see below / pending). Cost: +260 evidence tokens per question on average.
+- **v5** adds one-hop cross-reference expansion for multi-hop questions.
+
+### v5 retrieval, dev (n = 138), against v3
+
+| | recall@5 | recall@10 | MRR | hit@1 |
+|---|---|---|---|---|
+| v3 | 0.879 | 0.903 | 0.882 | 0.831 |
+| **v5** | **0.923** | **0.944** | 0.882 | 0.831 |
+
+| recall@5 | v3 | v5 |
+|---|---|---|
+| multi-hop | 0.656 | **0.828** |
+| lookup | 0.914 | 0.914 |
+| table | 0.958 | 0.958 |
+| amendment | 1.000 | 1.000 |
+
+- **Why it should work, checked before building:** for 19 of the 20 dev multi-hop questions whose
+  gold provision was missing from v3's top 5, it was exactly one cross-reference hop from
+  something v3 had ranked there, and the hop sets are small (median 23 provisions).
+- **The merge matters more than the expansion.** Fusing the expansion list with RRF raised
+  multi-hop recall but wrecked ranking: lookup hit@1 0.771 to 0.457, overall MRR 0.882 to 0.736,
+  because expansion candidates displaced correct rank-1 hits. Reserving slots instead (keep the
+  top 4 untouched, give places 5-6 to expansion candidates) leaves MRR and hit@1 unchanged by
+  construction.
+- **A regression I nearly shipped:** keep 3 + 2 slots scored higher on multi-hop (0.859) but an
+  expansion hit took rank 4 from a correct row on one section-393 table question, cutting table
+  recall@5 0.958 to 0.917. My first sweep printed table hit@1 but not table recall@5, so it
+  looked clean. Keep 4 regresses no question type and costs one multi-hop question.
+- **Overfitting caution:** about 20 settings were tried on dev's 32 multi-hop and 24 table
+  questions, and the good ones differ by a question or two. Expect the test-split gain to be
+  somewhat smaller than +0.17 on multi-hop.
+- Zero API tokens: dev embeddings are cached and the expansion is Postgres.
+
 ### Caveats
 
 - dev_mini has 6 questions per type, so a single question moves a per-type score by 0.17. Treat per-type end-to-end differences under ~0.2 as noise. The 138-question retrieval numbers are the reliable signal.

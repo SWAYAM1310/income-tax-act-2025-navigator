@@ -110,3 +110,47 @@ def test_by_ids_keeps_the_provision_an_amendment_question_names(conn):
     from statnav.retrieve.hybrid import by_ids
     kept = [h.chunk_id for h in by_ids(conn, ["s483(1)", "s483"], "v2", 10)]
     assert "v2:s483" in kept
+
+
+def test_slot_merge_leaves_the_top_untouched_and_fills_the_next_slots():
+    from statnav.retrieve.hybrid import slot_merge
+    base = [h(c) for c in "abcdef"]
+    extra = [h("x"), h("y"), h("z")]
+    got = [r.chunk_id for r in slot_merge(base, extra, keep=2, slots=2, k=10)]
+    assert got == ["a", "b", "x", "y", "c", "d", "e", "f"]
+
+
+def test_slot_merge_does_not_duplicate_a_chunk_already_kept():
+    from statnav.retrieve.hybrid import slot_merge
+    base = [h("a"), h("b"), h("c")]
+    got = [r.chunk_id for r in slot_merge(base, [h("a"), h("x")], keep=2, slots=1, k=10)]
+    assert got == ["a", "b", "x", "c"]
+
+
+def test_slot_merge_with_nothing_to_add_is_the_base_ranking():
+    from statnav.retrieve.hybrid import slot_merge
+    base = [h(c) for c in "abc"]
+    assert slot_merge(base, [], keep=2, slots=2, k=2) == base[:2]
+
+
+@pytest.mark.db
+def test_xref_hits_follow_a_reference_both_ways_and_skip_the_seeds(conn):
+    """s2(1) cites s515(3)(b), so a seed covering s2(1) must reach the chunk holding it."""
+    import numpy as np
+
+    from statnav.retrieve.hybrid import xref_hits
+    row = conn.execute("SELECT id FROM chunks WHERE version='v2' AND "
+                       "meta->'provisions' ? 's2(1)' LIMIT 1").fetchone()
+    seed = by_id_hit(conn, row[0])
+    # the seed's own embedding stands in for a query vector
+    emb = conn.execute("SELECT embedding FROM chunks WHERE id=%s", (row[0],)).fetchone()[0]
+    qvec = emb.to_numpy() if hasattr(emb, "to_numpy") else np.asarray(emb, dtype="float32")
+    got = xref_hits(conn, [seed], "v2", qvec, 50)
+    assert got and row[0] not in {x.chunk_id for x in got}
+    assert any("s515(3)(b)" in (x.meta.get("provisions") or []) for x in got)
+
+
+def by_id_hit(conn, chunk_id):
+    r = conn.execute("SELECT id, provision_id, 0.0, embed_text, tokens, page_start, page_end, "
+                     "meta FROM chunks WHERE id=%s", (chunk_id,)).fetchone()
+    return Hit(*r)

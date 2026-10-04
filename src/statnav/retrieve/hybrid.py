@@ -152,6 +152,38 @@ def under_ids(conn: psycopg.Connection, ids: list[str], version: str, qvec: np.n
     return [Hit(*r) for r in rows]
 
 
+def xref_hits(conn: psycopg.Connection, seeds: list[Hit], version: str, qvec: np.ndarray,
+              k: int = 10, *, both_ways: bool = True) -> list[Hit]:
+    """Chunks one cross-reference hop from the `seeds`, ordered by dense similarity.
+
+    Multi-hop questions need two provisions, and one retrieval pass usually finds one. On dev,
+    for 19 of the 20 multi-hop questions whose gold was missing from v3's top 5, the missing
+    provision was one cross-reference hop from something v3 had ranked there. The hop sets are
+    small (median 23 provisions), so as with the id lookups the structure picks the candidates
+    and the embedding picks the order.
+
+    `both_ways` follows references in both directions: "section A applies subject to section B"
+    makes B a neighbour of A, and A a neighbour of B.
+    """
+    provisions = sorted({p for h in seeds for p in (h.meta.get("provisions") or [])})
+    if not provisions:
+        return []
+    skip = [h.chunk_id for h in seeds]
+    back = " UNION SELECT from_id FROM cross_refs WHERE to_id = ANY(%s)" if both_ways else ""
+    args: list = [provisions] + ([provisions] if both_ways else [])
+    neighbours = [r[0] for r in conn.execute(
+        "SELECT to_id FROM cross_refs WHERE from_id = ANY(%s) AND to_id IS NOT NULL" + back,
+        args).fetchall() if r[0]]
+    if not neighbours:
+        return []
+    rows = conn.execute(
+        _COLS + "WHERE version = %s AND meta->'provisions' ?| %s AND NOT (id = ANY(%s)) "
+        "ORDER BY embedding <=> %s LIMIT %s",
+        (version, neighbours, skip, qvec, k),
+    ).fetchall()
+    return [Hit(*r) for r in rows]
+
+
 def rrf(lists: list[tuple[list[Hit], float]], k: int = 10, c: int = RRF_C) -> list[Hit]:
     """Reciprocal rank fusion of weighted ranked lists, highest fused score first."""
     scores: dict[str, float] = {}
@@ -176,14 +208,35 @@ def rrf(lists: list[tuple[list[Hit], float]], k: int = 10, c: int = RRF_C) -> li
 DEFAULT_RETRIEVERS = ("dense", "ids", "under")
 
 
+def slot_merge(base: list[Hit], extra: list[Hit], *, keep: int, slots: int,
+               k: int = 10) -> list[Hit]:
+    """Keep the top `keep` of `base`, give the next `slots` places to `extra`, then the rest.
+
+    Expansion candidates must supplement the top results, not compete with them. Fusing the
+    expansion list with RRF raised multi-hop recall@5 (0.656 -> 0.75) but pushed correct
+    rank-1 hits down: lookup hit@1 0.771 -> 0.457, and overall MRR 0.882 -> 0.736. Reserving
+    slots leaves the top `keep` untouched, so MRR and hit@1 are unchanged by construction.
+    """
+    out = list(base[:keep])
+    seen = {h.chunk_id for h in out}
+    add = [h for h in extra if h.chunk_id not in seen][:slots]
+    out += add
+    seen |= {h.chunk_id for h in add}
+    out += [h for h in base[keep:] if h.chunk_id not in seen]
+    return out[:k]
+
+
 def search(conn: psycopg.Connection, qvec: np.ndarray, query: str, version: str,
            k: int = 10, *, pool: int = 30, retrievers: tuple[str, ...] | list[str] = (),
-           weights: dict | None = None) -> list[Hit]:
-    """Fuse the enabled retrievers with RRF.
+           weights: dict | None = None, xref: dict | None = None) -> list[Hit]:
+    """Fuse the enabled retrievers with RRF, then optionally expand by cross-reference.
 
     `pool` is how deep each retriever goes before fusion; `k` is how many survive it. The ids
     weight is insensitive in practice (1.0 to 5.0 all scored 0.887 on dev): exact id hits are
     few and land high regardless.
+
+    `xref` ({seed_n, keep, slots, both_ways}) adds a second stage: the top `seed_n` fused hits
+    seed a one-hop cross-reference expansion (`xref_hits`), merged with `slot_merge`.
     """
     w = {"dense": 1.0, "fts": 1.0, "ids": 1.0, "under": 1.0, **(weights or {})}
     want = tuple(retrievers) or DEFAULT_RETRIEVERS
@@ -196,4 +249,9 @@ def search(conn: psycopg.Connection, qvec: np.ndarray, query: str, version: str,
     unknown = set(want) - set(sources)
     if unknown:
         raise ValueError(f"unknown retrievers: {sorted(unknown)}")
-    return rrf([(sources[name](), w[name]) for name in want], k=k)
+    if not xref:
+        return rrf([(sources[name](), w[name]) for name in want], k=k)
+    base = rrf([(sources[name](), w[name]) for name in want], k=pool)
+    extra = xref_hits(conn, base[: xref.get("seed_n", 3)], version, qvec, pool,
+                      both_ways=xref.get("both_ways", True))
+    return slot_merge(base, extra, keep=xref.get("keep", 3), slots=xref.get("slots", 2), k=k)

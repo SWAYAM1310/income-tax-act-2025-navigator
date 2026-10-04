@@ -1,0 +1,30 @@
+# v5: v4 plus one-hop cross-reference expansion, aimed at multi-hop questions.
+#
+# A multi-hop question needs two provisions and one retrieval pass usually finds one. On dev,
+# for 19 of the 20 multi-hop questions whose gold was missing from v3's top 5, the missing
+# provision was one cross-reference hop from something v3 had ranked there (hop sets are small:
+# median 23 provisions). So the top 3 fused hits seed an expansion over the cross_refs table
+# (both directions), and the candidates are ordered by embedding similarity.
+#
+# The merge is the important part. Fusing the expansion in with RRF raised multi-hop recall@5
+# (0.656 -> 0.75) but pushed correct rank-1 hits down (lookup hit@1 0.771 -> 0.457, MRR
+# 0.882 -> 0.736). Reserving slots keeps the top 4 untouched and gives places 5-6 to expansion
+# candidates, so MRR and hit@1 are unchanged by construction.
+#
+# keep 4 + 2 slots rather than keep 3 + 2: the latter scores multi-hop recall@5 0.859 against
+# 0.828, but its expansion hit took rank 4 from a correct row on one section-393 table question
+# and cut table recall@5 0.958 -> 0.917. Keep 4 regresses no question type. Swept over ~20
+# settings on dev; the good ones differ by a question or two, so the exact numbers are
+# tuned-on-dev (32 multi-hop, 24 table questions) and will likely shrink slightly on test.
+description: Hybrid retrieval + endnotes + one-hop cross-reference expansion
+chunks: v2
+retrieval:
+  mode: hybrid
+  k: 10
+  pool: 30
+  retrievers: [dense, ids, under]
+  weights: {dense: 1.0, ids: 2.0, under: 1.0, fts: 1.0}
+  endnotes: true
+  xref: {seed_n: 3, keep: 4, slots: 2, both_ways: true}
+evidence_budget: 4500
+generation: {prompt: basic}
