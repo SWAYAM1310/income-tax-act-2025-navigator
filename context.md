@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-03. **Phase 3 is done; Phase 4 is nearly done.** Only v1 end-to-end on dev_mini is left (19/30; Groq quota). All work through 2026-10-03, including the partial v1 dev_mini results, is committed and pushed to `main`. Update this file at the end of every session or phase._
+_Last updated: 2026-10-04. **Phases 0–4 are all DONE** and committed/pushed to `main`. The eval ladder through v2 is written up in `results/ladder.md`. There is now also a **working interactive chatbot** (`python -m statnav.chat`) sharing the eval harness's exact generation path. **Phase 5 (v3: hybrid FTS + RRF + reranker + section-ID boost) is in progress.** Update this file at the end of every session or phase._
 
 > **Resume here:** see "Next steps" step 1. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding).
 
@@ -49,14 +49,30 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - the oracle context now includes the linked amendment endnotes;
     - cached replies keep the latency measured when they were first generated;
     - the report marks incomplete runs.
-- **Phase 4, v1 + v2 eval runs — NEARLY DONE.** The write-up is in `results/ladder.md`.
+- **Phase 4, v1 + v2 eval runs — DONE (2026-10-04).** The write-up is in `results/ladder.md`.
   - Retrieval on dev, recall@5 / MRR: v0 0.460 / 0.404; v1 0.472 / 0.391; **v2 0.589 / 0.578**. v2's lookup recall@5 is 0.91 (v0: 0.54). Amendment stays at 0.06 for every version.
-  - End-to-end on dev_mini, v2 against v0:
-    - fact recall 0.528 vs 0.486; citation precision 0.646 vs 0.583; table exact 0.667 vs 0.500;
-    - **2,155 vs 4,613 tokens per question**.
+  - End-to-end on dev_mini, all three versions now complete at n = 30 (`results/report_dev_mini.md`):
+
+    | | Fact recall | Cite prec. | Cite rec. | Grounded num. | Table exact | Amend. type | Refusal P / R | Evidence tok | LLM tok/q |
+    |---|---|---|---|---|---|---|---|---|---|
+    | v0 | 0.486 | 0.583 | 0.542 | 0.583 | 0.500 | 0.000 | 0.38 / 0.83 | 4,106 | 4,613 |
+    | v1 | 0.465 | 0.542 | 0.500 | 0.558 | 0.500 | 0.000 | 0.42 / 0.83 | 4,106 | 4,622 |
+    | v2 | **0.528** | **0.646** | **0.583** | **0.600** | **0.667** | **0.167** | 0.42 / 0.83 | **1,628** | **2,155** |
+    | oracle | 0.778 | 1.000 | 0.917 | 0.925 | 0.667 | 0.667 | 1.00 / 0.83 | 460 | 920 |
+
+  - **v1 (cleaning) is flat to slightly worse than v0 end-to-end at the same cost** — identical evidence tokens, 4,622 vs 4,613 LLM tokens. This matches the retrieval finding: tidying the text doesn't change which 512-token window a provision lands in. The gain comes from structural chunking (v2), which is both better and 53% cheaper per question.
+  - **The completed v1 run replaced a misleading partial.** The 19/30 quota-truncated run read 0.588 fact recall; over all 30 it is 0.465. Questions run in a fixed order, so truncated runs are biased samples, not early estimates.
   - False refusals are mostly amendment questions where retrieval missed the endnote (v2 has 7 of 12).
-  - v1 end-to-end: **19/30, incomplete** (quota).
-  - Groq spend 2026-10-03: gpt-oss-120b 193,661 tokens (the daily cap is 200K, with the client stopping at 195K).
+  - Groq spend: 2026-10-03 gpt-oss-120b 193,661 tokens; 2026-10-04 gpt-oss-120b 50,939 tokens (11 new answers + 19 replayed from cache). The daily cap is 200K, with the client stopping at 195K.
+- **Interactive chatbot — DONE (2026-10-04),** built out of plan order at the user's request so answer quality could be inspected directly rather than only through metrics.
+  - `src/statnav/answer.py` holds the shared generation path: `SYSTEM_PROMPT`, `pack()` (greedy evidence packing), `user_prompt()`, `parse_citations()`, and an `Answerer` class (`for_version()`, `.ask()` → `Answer`). `evals/run.py` imports all of it, so **the chat and the ladder cannot drift apart.**
+  - Verified behaviour-preserving: re-running v2 on dev_mini after the refactor produced `metrics.json` and `outputs.jsonl` **byte-identical** to the committed ones, at zero token cost (all replies cached).
+  - `src/statnav/chat.py` is the CLI: one-shot or REPL, with `/evidence`, `/k`, `/version`, `/tokens`, `/help`, `/quit`. Logs are suppressed unless `--verbose`. An error renders as `UNAVAILABLE`, never as an answer.
+  - `tests/test_answer.py`: 7 offline tests (44 total now).
+  - What the live answers showed, beyond what the metrics say:
+    - **Lookup is genuinely good** — "how is agricultural income defined" returns all of s2(5) clauses (a)–(d) plus both exclusions, cited to `v2:s2(5)` p.2.
+    - **Table answers under-extract rather than hallucinate.** For insurance-commission TDS the model retrieved the exactly right row (`s393:tbl1#1(i)`) and said "Rates in force", which the row genuinely says — but it dropped the row's **"Threshold limit: Rs. 20,000"**. So `table_exact` 0.667 is a *generation* gap (one field missed from a passage it already had), not retrieval and not hallucination. A prompt change ("report every rate, threshold and condition in the cited row") is the fix, not Phase 5's retrieval work.
+    - **Amendment questions refuse,** confirming the 0.06 amendment recall end-to-end.
 - Earlier Phase 3 notes:
   - **222 candidates** in `evals/data/candidates.jsonl`: lookup 54 (32 templated definitions + 22 LLM-drafted numeric), table 45, amendment 48, multi-hop 45 (LLM-drafted from cross-reference pairs), refusal 30. Drafting used ~40K gpt-oss-20b tokens.
   - **All 222 accepted into `evals/data/golden.jsonl`.** The user reviewed 2 individually and then explicitly instructed bulk acceptance of the other 220 (2026-10-02). These are logged as `bulk-accept (user instruction)` in `verification_log.csv`. They were not individually edited, so the README must say the questions were spot-checked, not individually verified.
@@ -100,6 +116,8 @@ python -m uv run python tasks.py check             # lint + db up/load + offline
 .venv/Scripts/python.exe -m statnav.index.load     # artefacts -> Postgres
 .venv/Scripts/python.exe -m statnav.index.build --version v2 [--dry-run]   # embed + pgvector
 .venv/Scripts/python.exe -m statnav.retrieve.search "how is agricultural income defined" -k 5
+.venv/Scripts/python.exe -m statnav.chat                       # interactive chatbot (v2)
+.venv/Scripts/python.exe -m statnav.chat "<question>"          # one-shot; --evidence, --version, --verbose
 .venv/Scripts/python.exe -m evals.build.generate [--llm]   # (re)draft candidates; never overwrites reviewed ones
 .venv/Scripts/python.exe -m evals.review --reviewer <name> [--type table]   # HUMAN REVIEW (a/e/r/s/q)
 .venv/Scripts/python.exe -m evals.splits [--freeze]  # dev / test / dev_mini from golden.jsonl
@@ -115,6 +133,8 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - `src/statnav/embed/`: Jina client, sqlite cache, token counting
 - `src/statnav/index/`: schema, loader, chunkers (v0/v1/v2), index build
 - `src/statnav/retrieve/`: `dense.py` (pgvector k-NN; returns `embed_text` with breadcrumbs), `search.py`
+- `src/statnav/answer.py`: the generation path shared by the chat and `evals/run.py` (prompt, evidence packing, citation parsing, `Answerer`)
+- `src/statnav/chat.py`: interactive/one-shot CLI chatbot
 - `src/statnav/llm/client.py`: Groq chat with cache, rate limiter and daily ledger
 - `configs/`: `base.yaml`, `models.yaml` (roles; list prices empty until verified), `versions/{v0,v1,v2,oracle}.yaml`
 - `evals/`: `common.py` (norm, artefacts), `build/generate.py`, `review.py`, `splits.py`, `run.py`, `metrics.py`, `report.py`
@@ -123,13 +143,16 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
   - chunks `v2:<id>`; table notes `v2:s393:tbl1:note3`; window chunks `v0:<n>`
 
 ## Next steps (in order)
-1. **Finish Phase 4** after the Groq reset (00:00 UTC / 05:30 IST). This costs ~50K tokens: 19 answers are cached and 11 are new.
-   ```
-   .venv/Scripts/python.exe -m evals.run --version v1 --split dev_mini
-   .venv/Scripts/python.exe -m evals.report --split dev_mini
-   ```
-   Then fill in the v1 end-to-end row in `results/ladder.md` and commit (ask first).
-2. **Phase 5 and beyond:** hybrid Postgres FTS + RRF, Jina reranker (`jina-reranker-v3.5`, cached) and an exact section-ID boost, which targets amendment retrieval (0.06 now). Then Phases 6–11 per the plan: LangGraph agent with cross-reference expansion, table/amendment routing, citation verifier, MCP + FastAPI, Vite frontend, CI + README.
+1. **Phase 5 — v3 hybrid retrieval (IN PROGRESS).** Postgres FTS + dense with RRF, the Jina reranker (`jina-reranker-v3.5`, cached) and an exact section-ID boost. The target is **amendment retrieval, stuck at 0.06 recall@5 at every version** because dense embeddings can't match on provision numbers; the section-ID boost is the specific fix. Lookup (0.91) and table (0.96) are already near ceiling, so the headroom is amendment and multi-hop (~0.50).
+   - Add `configs/versions/v3.yaml`, extend `src/statnav/retrieve/` with FTS + RRF + rerank, then:
+     ```
+     .venv/Scripts/python.exe -m evals.run --version v3 --split dev --retrieval-only
+     .venv/Scripts/python.exe -m evals.run --version v3 --split dev_mini
+     .venv/Scripts/python.exe -m evals.report --split dev
+     ```
+   - Reranker calls are paid Jina usage — **ask before the first live rerank run** and check the token estimate.
+   - Budget the end-to-end run: ~50K Groq tokens per dev_mini version against the 200K/day cap, so at most ~3 full dev_mini runs per day.
+2. **Phases 6–11 per the plan:** LangGraph agent with cross-reference expansion (targets multi-hop), table/amendment routing, citation verifier, MCP + FastAPI, Vite frontend, CI + README.
 3. Optional: reword the templated table questions in **dev** that copy row text, since they inflate table scores. The test split is frozen, so it can't change.
 
 ## Known issues
@@ -139,9 +162,13 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - **Dataset provenance:** 220 of 222 golden questions were bulk-accepted on the user's instruction without per-item edits. State this in the README; don't describe them as individually human-verified.
 - **Multi-hop gold facts are partly weak** (LLM-drafted, e.g. multi_hop-071d02c9, multi_hop-343e19fd). Soft matching fixed the paraphrase misses (oracle 0.17 → 0.58), but the weak facts remain.
 - **dev_mini is small** (6 per type): one question moves a per-type score by 0.17.
+- **Quota-truncated runs produce biased scores, not early estimates.** Questions are evaluated in a fixed order, so a partial run over-weights whatever types come first. v1's 19/30 run read 0.588 fact recall against 0.465 over the full 30. Only compare rows where `run_meta.json` has `n_completed == n_questions` and no `incomplete` field; `evals/report.py` marks the rest.
 - **Latency:** most answers were replayed from cache; v0's p50 rests on 6 measured calls. Don't compare latency across versions yet.
 - **Oracle refusal recall is 0.83:** one refusal question was answered from the v2 distractor passages.
 - **Amendment questions name a provision number;** dense retrieval can't match on numbers (expected; v3 fixes this).
+- **Table answers drop fields they already retrieved.** The model returns the right row but omits a second column (e.g. the Rs. 20,000 threshold on `s393:tbl1#1(i)`). This is a generation gap, not retrieval — a prompt change is the fix, and it should be a *separate* ladder step so it isn't confounded with v3's retrieval changes.
+- **The per-minute rate limiter is in-process only.** The daily ledger is shared in `.cache/llm.sqlite`, but the 8K tokens/min window lives in each `ChatClient`. So running the chat right after an eval run triggers real provider 429s (`QuotaExhausted: provider says retry after ...`, seen up to ~1000s) even with the daily cap nowhere near. Leave a few minutes between an eval run and interactive use, or persist the window.
+- **Citation parsing is case-sensitive:** a lowercase `"c1"` from the model is silently dropped. Pinned by `tests/test_answer.py::test_parse_citations_is_case_sensitive_today`, because widening it would move the committed citation scores. Revisit when a version changes the prompt.
 - **Git:** public repo https://github.com/SWAYAM1310/income-tax-act-2025-navigator (branch `main`). The `gh` CLI is at `C:\Program Files\GitHub CLI\gh.exe`, logged in as SWAYAM1310. Ask before committing or pushing.
 
 ## Environment gotchas

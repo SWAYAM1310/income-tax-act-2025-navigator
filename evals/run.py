@@ -29,24 +29,12 @@ from evals.common import (
     write_jsonl,
 )
 from evals.metrics import aggregate, generation_metrics, gold_targets, retrieval_metrics
+from statnav.answer import SYSTEM_PROMPT, pack, parse_citations, user_prompt
 from statnav.config import CONFIG_DIR, load_yaml
 from statnav.embed import tokens
 from statnav.obs.logging import get_logger
 
 log = get_logger("evals.run")
-
-SYSTEM_PROMPT = """You answer questions about India's Income-tax Act, 2025 (as amended by the \
-Finance Act, 2026).
-Rules:
-- Use ONLY the numbered context passages. Do not use outside knowledge.
-- Quote key words, numbers, rates, thresholds and periods exactly as the passages state them.
-- Name the provision you rely on (e.g. "section 2(5)") and list the passages you used, as \
-"C1", "C2", ..., in "citations".
-- Set "refused": true, with a one-sentence reason in "answer", when the question is about \
-something the Act does not contain (Income-tax Rules, forms, circulars, notifications, case \
-law, filing procedures, other laws), asks for a personal tax computation or advice, or the \
-passages do not contain the answer.
-Return only JSON: {"answer": "...", "citations": ["C1"], "refused": false}"""
 
 
 def load_questions(split: str, final: bool) -> list[dict]:
@@ -83,24 +71,6 @@ def oracle_hits(q: dict, budget: int) -> list[dict]:
         hits.append({"chunk_id": f"oracle:{gid}", "text": piece, "tokens": tokens.count(piece),
                      "provisions": descendants(gid), "page_start": None, "page_end": None})
     return hits
-
-
-def pack(hits: list[dict], budget: int) -> list[dict]:
-    out, used = [], 0
-    for h in hits:
-        if used + h["tokens"] > budget:
-            continue
-        out.append(h)
-        used += h["tokens"]
-    return out
-
-
-def user_prompt(question: str, evidence: list[dict]) -> str:
-    blocks = []
-    for n, h in enumerate(evidence, 1):
-        pages = f" (pp. {h['page_start']}-{h['page_end']})" if h.get("page_start") else ""
-        blocks.append(f"[C{n}]{pages}\n{h['text']}")
-    return f"Question: {question}\n\nContext passages:\n\n" + "\n\n".join(blocks)
 
 
 def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int | None) -> dict:
@@ -168,11 +138,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
                 break
             except LLMError as exc:
                 out = {"answer": f"[error: {exc}]", "citations": [], "refused": False}
-            cited = []
-            for c in out.get("citations") or []:
-                k = str(c).strip("[]C ")
-                if k.isdigit() and 1 <= int(k) <= len(evidence):
-                    cited.append(evidence[int(k) - 1])
+            cited = parse_citations(out, evidence)
             rec["answer"] = out.get("answer")
             rec["refused"] = bool(out.get("refused"))
             rec["cited"] = [h["chunk_id"] for h in cited]

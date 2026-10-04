@@ -36,11 +36,11 @@ Each cell is recall@5 / MRR.
 | | Fact recall | Citation precision | Citation recall | Grounded numbers | Table exact | Amendment type | Refusal precision / recall | Evidence tok | LLM tok/q |
 |---|---|---|---|---|---|---|---|---|---|
 | v0 | 0.486 | 0.583 | 0.542 | 0.583 | 0.500 | 0.000 | 0.38 / 0.83 | 4,106 | 4,613 |
-| v2 | 0.528 | 0.646 | 0.583 | 0.600 | 0.667 | 0.167 | 0.42 / 0.83 | 1,628 | 2,155 |
+| v1 | 0.465 | 0.542 | 0.500 | 0.558 | 0.500 | 0.000 | 0.42 / 0.83 | 4,106 | 4,622 |
+| v2 | **0.528** | **0.646** | **0.583** | **0.600** | **0.667** | **0.167** | 0.42 / 0.83 | **1,628** | **2,155** |
 | oracle | 0.778 | 1.000 | 0.917 | 0.925 | 0.667 | 0.667 | 1.00 / 0.83 | 460 | 920 |
 
-v1 end-to-end is pending: it stopped at 19 of 30 on the Groq daily quota.
-
+- **Cleaning (v1) does not pay off end-to-end either.** Against v0 it is flat to slightly worse on every generation metric (fact recall 0.465 vs 0.486, citation precision 0.542 vs 0.583, table exact unchanged at 0.500) for the same cost: identical evidence tokens and 4,622 vs 4,613 LLM tokens per question. Stripping headers and footers does not change which 512-token window a provision falls into, so the generator sees the same evidence; the small differences are within dev_mini's noise. This mirrors the retrieval result and is the useful negative finding of the phase — the win comes from chunking structurally, not from tidying the text.
 - **v2 is better and cheaper.** Fact recall rises 0.04, citation precision 0.06 and table exact 0.17, while tokens per question fall 53% (4.6K → 2.2K). Smaller, precise chunks leave the model less irrelevant text to cite.
 - **The gap to the oracle is mostly retrieval.**
   - Per-type fact recall for v2 against the oracle is: lookup 0.83 vs 1.00, table 0.78 vs 0.78, multi-hop 0.33 vs 0.58, amendment 0.17 vs 0.75.
@@ -53,6 +53,8 @@ v1 end-to-end is pending: it stopped at 19 of 30 on the Groq daily quota.
 ### Caveats
 
 - dev_mini has 6 questions per type, so a single question moves a per-type score by 0.17. Treat per-type end-to-end differences under ~0.2 as noise. The 138-question retrieval numbers are the reliable signal.
+- **Partial runs are not a preview of the full score.** v1's first attempt stopped at 19 of 30 on the Groq daily cap and read 0.588 fact recall; completing the same run over all 30 gave 0.465. The questions are evaluated in a fixed order, so a truncated run is a biased sample, not an early estimate. Only rows with n = 30 are compared here.
+- **v1 versus v0 on retrieval depends on the split.** On the 138-question dev set v1 edges v0 (recall@5 0.472 vs 0.460); on dev_mini the order reverses (0.500 vs 0.562). Both gaps are small, which is the point: cleaning has no real effect either way, and dev_mini is too small to resolve it.
 - Table retrieval scores are inflated: templated table questions reuse the row's own wording.
 - 220 of the 222 golden questions were bulk-accepted after spot checks, not individually verified.
 - Latency is not comparable across versions: most answers were replayed from cache, and v0's p50 rests on 6 measured calls.

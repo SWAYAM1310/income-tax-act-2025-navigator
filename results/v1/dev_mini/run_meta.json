@@ -14,10 +14,10 @@
     }
   },
   "n_questions": 30,
-  "n_completed": 19,
+  "n_completed": 30,
   "retrieval_only": false,
   "answer_model": "openai/gpt-oss-120b",
-  "timestamp": "2026-10-03T06:05:54+00:00",
+  "timestamp": "2026-10-04T14:54:24+00:00",
   "jina_tokens_billed": 0,
-  "incomplete": "openai/gpt-oss-120b: 193,661 tokens used today; this call (~5,906) would pass 195,000"
+  "incomplete": null
 }
