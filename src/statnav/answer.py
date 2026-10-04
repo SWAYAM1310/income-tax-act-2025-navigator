@@ -114,12 +114,9 @@ class Answerer:
         self.conn.close()
 
     def retrieve(self, question: str, k: int | None = None) -> list[dict]:
-        from statnav.retrieve.dense import knn
+        from statnav.retrieve.route import as_dicts, retrieve
 
-        found = knn(self.conn, self.jina.embed_query(question), self.chunks, k or self.k)
-        return [{"chunk_id": h.chunk_id, "text": h.text, "tokens": h.tokens,
-                 "provisions": h.meta.get("provisions", []), "page_start": h.page_start,
-                 "page_end": h.page_end, "score": round(h.score, 4)} for h in found]
+        return as_dicts(retrieve(self.conn, self.jina, question, self.cfg, k))
 
     def ask(self, question: str, k: int | None = None) -> Answer:
         from statnav.llm.client import LLMError, QuotaExhausted

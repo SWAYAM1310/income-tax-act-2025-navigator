@@ -50,6 +50,60 @@ Each cell is recall@5 / MRR.
   - In each case the needed endnote or cross-referenced provision wasn't retrieved, so refusing was the correct behaviour given the evidence.
   - With gold evidence, the oracle refuses no answerable question.
 
+## Phase 5: v3 (hybrid retrieval)
+
+v3 keeps v2's chunks and changes only retrieval: dense k-NN is fused by RRF with two
+**provision-id lookups**, driven by references parsed straight out of the question
+(`statnav/retrieve/ids.py` handles "section 228(3)(b)(ii)(A)" and
+"Schedule XI, Part A, paragraph 4(f)"). The parser resolves the exact gold id for **all 48**
+amendment questions in the golden set.
+
+### Retrieval, dev (n = 138)
+
+| | recall@5 | MRR | hit@1 |
+|---|---|---|---|
+| v2 | 0.589 | 0.578 | 0.516 |
+| **v3** | **0.879** | **0.882** | **0.831** |
+
+Per type, recall@5 / MRR / hit@1:
+
+| | v2 | v3 |
+|---|---|---|
+| lookup | 0.914 / 0.843 / 0.800 | 0.914 / 0.826 / 0.771 |
+| table | 0.958 / 0.892 / 0.833 | 0.958 / 0.872 / 0.792 |
+| multi-hop | 0.500 / 0.621 / 0.500 | **0.656 / 0.829 / 0.750** |
+| amendment | 0.061 / 0.028 / 0.000 | **1.000 / 1.000 / 1.000** |
+
+- **Amendment retrieval is solved: 0.061 to 1.000 recall@5, and MRR and hit@1 are also 1.000.**
+  Every dev amendment question now ranks its gold provision first. The questions always name
+  the provision, and dense embeddings carry no signal for a number -- Postgres' `simple`
+  tokeniser even splits `483(1)` into `483` and `1`. Looking the reference up by id makes it an
+  exact match instead of a semantic one.
+- **Multi-hop improved as a side effect** (0.500 to 0.656 recall@5, hit@1 0.500 to 0.750):
+  these questions often cite the section they cross-reference.
+- **Lookup and table recall@5 are untouched** (0.914, 0.958), with hit@1 within one question of
+  v2 (24 table questions, so 0.042 each). Getting there took two corrections, both found by
+  measurement rather than design:
+  - Boosting only the *exact* id drove **table hit@1 from 0.833 to 0.000**. Section 393's own
+    chunk is a 36-token heading and the rates live in `s393:tbl1#...` chunks, so the exact-match
+    boost put an empty stub at rank 1. Fix: a second retriever (`under`) returns the provision
+    *and its descendants* ordered by embedding similarity, so the ids give the candidate set and
+    the embedding gives the order.
+  - Ordering *only* by embedding then lost amendment again (1.000 to 0.121), because dense
+    ranking buries the provision the question names. Fix: fuse both lists, and drop from the
+    exact list any match that is a heading stub or a **container** -- a provision whose content
+    sits in deeper chunks. That test is structural (does a deeper chunk exist?), so it separates
+    "the question names the answer" from "the question names where to look" **without needing to
+    know the question's type**. It lifted MRR from 0.848 to 0.882 and table hit@1 from 0.583 to
+    0.792.
+- **Full-text search is implemented, tested and switched off.** Postgres' `ts_rank` applies no
+  IDF and `simple` keeps stop words, so a natural question ANDed together matches nothing
+  (verified: 0 rows) and OR-ing it ranks badly. Even restricted to rare terms it lowered overall
+  recall@5 to 0.871 by costing lookup (0.800 vs 0.914). It did lift multi-hop (0.719 vs 0.656),
+  so `retrievers: [dense, fts, ids, under]` stays available for the cross-reference work in v4.
+- The whole phase cost **0 API tokens**: dev query embeddings were already cached, and the id
+  lookups are pure Postgres.
+
 ### Caveats
 
 - dev_mini has 6 questions per type, so a single question moves a per-type score by 0.17. Treat per-type end-to-end differences under ~0.2 as noise. The 138-question retrieval numbers are the reliable signal.

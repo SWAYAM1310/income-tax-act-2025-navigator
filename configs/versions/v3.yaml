@@ -1,0 +1,30 @@
+# v3: hybrid retrieval. Dense k-NN fused by RRF with two provision-id lookups driven by the
+# references parsed out of the question ("section 483(1)", "Schedule XI, Part A, para 4(f)").
+#
+# Amendment questions always name their provision and dense retrieval cannot match a number,
+# which is why amendment recall@5 was 0.06 through v2. But a reference means different things
+# to different questions, so two lookups are fused:
+#   ids   - the provision named, exactly. What an amendment question wants.
+#           Heading stubs and container provisions are skipped (see hybrid.by_ids): section
+#           393's own chunk is a heading whose rates live in `s393:tbl1#...`, and boosting it
+#           drove table hit@1 from 0.833 to 0.000. Both stay reachable through `under`.
+#   under - that provision and its descendants, ordered by embedding similarity. What a table
+#           question wants: the ids give the candidate set, the embedding gives the order.
+#
+# Swept on dev (138 q). This setting: recall@5 0.879, MRR 0.882, amendment recall@5 1.000,
+# table hit@1 0.792 (v2: 0.833, i.e. one question of 24). Without the container rule MRR is
+# 0.848 and table hit@1 0.583; at ids 1.2 MRR is 0.869 with amendment hit@1 0.879.
+#
+# Full-text search is implemented and tested but OFF: on dev it lowered overall recall@5 to
+# 0.871 by costing lookup (0.800 vs 0.914), even restricted to rare terms. It did lift
+# multi-hop (0.719 vs 0.656), so it is kept for the cross-reference work in v4.
+description: Hybrid retrieval - dense + exact provision-id lookup, fused with RRF
+chunks: v2
+retrieval:
+  mode: hybrid
+  k: 10
+  pool: 30
+  retrievers: [dense, ids, under]
+  weights: {dense: 1.0, ids: 2.0, under: 1.0, fts: 1.0}
+evidence_budget: 4500
+generation: {prompt: basic}

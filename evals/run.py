@@ -83,6 +83,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
     from statnav.embed.jina import JinaClient
     from statnav.index.db import connect
     from statnav.retrieve.dense import knn
+    from statnav.retrieve.route import as_dicts, retrieve
 
     jina = JinaClient.from_config()
     conn = connect()
@@ -100,14 +101,12 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
         jina_before = jina.usage.tokens
         if mode == "oracle" and not q["should_refuse"]:
             hits = oracle_hits(q, budget)
-        else:
+        elif mode == "oracle":
             # refusals in oracle mode still see realistic (v2) passages as distractors
-            chunk_version = cfg["chunks"] if mode != "oracle" else "v2"
-            k = cfg["retrieval"]["k"] if mode != "oracle" else distractor_k
-            found = knn(conn, jina.embed_query(q["question"]), chunk_version, k)
-            hits = [{"chunk_id": h.chunk_id, "text": h.text, "tokens": h.tokens,
-                     "provisions": h.meta.get("provisions", []), "page_start": h.page_start,
-                     "page_end": h.page_end, "score": round(h.score, 4)} for h in found]
+            found = knn(conn, jina.embed_query(q["question"]), "v2", distractor_k)
+            hits = as_dicts(found)
+        else:
+            hits = as_dicts(retrieve(conn, jina, q["question"], cfg))
         rec["retrieved"] = [{k: h[k] for k in ("chunk_id", "provisions") if k in h}
                             for h in hits]
         if mode != "oracle":

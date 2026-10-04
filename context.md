@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-04. **Phases 0–4 are all DONE** and committed/pushed to `main`. The eval ladder through v2 is written up in `results/ladder.md`. There is now also a **working interactive chatbot** (`python -m statnav.chat`) sharing the eval harness's exact generation path. **Phase 5 (v3: hybrid FTS + RRF + reranker + section-ID boost) is in progress.** Update this file at the end of every session or phase._
+_Last updated: 2026-10-04. **Phases 0–4 are all DONE** and committed/pushed to `main`. The eval ladder through v2 is written up in `results/ladder.md`. There is now also a **working interactive chatbot** (`python -m statnav.chat`) sharing the eval harness's exact generation path. **Phase 5 (v3 hybrid retrieval) is DONE for retrieval** -- amendment recall@5 went 0.061 to 1.000 and overall MRR 0.578 to 0.882 on dev, at zero API cost. No reranker (dropped as billable; not needed). **v4 (amendment endnotes in the evidence) is built and structurally verified; its end-to-end numbers are pending on Groq's per-minute rate limit, not on budget.** Update this file at the end of every session or phase._
 
 > **Resume here:** see "Next steps" step 1. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding).
 
@@ -12,11 +12,11 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
 |---|---|
 | Agent LLM | Groq free tier: `openai/gpt-oss-120b` (answers) and `openai/gpt-oss-20b` (classify/verify/question drafting). Limits: 8K tokens/min and 200K tokens/day per model, enforced by `llm/client.py` (ledger in `.cache/llm.sqlite`). Evidence is capped at 4.5K tokens per prompt. |
 | Embeddings | Jina API `jina-embeddings-v5-text-small` (1024-d, confirmed working), tasks `retrieval.passage` / `retrieval.query` |
-| Reranker | Jina API `jina-reranker-v3.5` (from v3) |
+| Reranker | **DROPPED (user decision, 2026-10-04): no reranker.** It was the only remaining billable item and v3 hit Phase 5's target without it (amendment recall@5 0.061 to 1.000 at zero cost). `JinaClient.rerank()` exists and is unused; the `reranks` cache table has 0 rows, so it has never been called. Do not enable it. |
 | Vector store | Postgres 16 + pgvector 0.8.6 in Docker, port 5433 |
 | LLM judge | None for now (deterministic metrics only) |
 | Frontend | Vite + React + TS |
-| Spending | **Ask before any paid API call or any Jina run over 1M tokens.** No local ML. |
+| Spending | **Keep everything free from here on (user, 2026-10-04).** Groq is a free tier (200K tokens/day) and covers all generation. Jina embeddings are the only billable service: ~1.4M tokens were spent building the indexes on 2026-10-02/03, and ongoing use is only ~10 tokens per new question (cached). No reranker. Still ask before any paid call or any Jina run over 1M tokens. No local ML. |
 | Long-context baseline | Oracle-context baseline instead (`configs/versions/oracle.yaml`) |
 | Secrets | Keys live in `.env` (gitignored). `.env.example` must stay blank; the user once pasted keys into it, and they were moved. |
 
@@ -73,6 +73,67 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - **Lookup is genuinely good** — "how is agricultural income defined" returns all of s2(5) clauses (a)–(d) plus both exclusions, cited to `v2:s2(5)` p.2.
     - **Table answers under-extract rather than hallucinate.** For insurance-commission TDS the model retrieved the exactly right row (`s393:tbl1#1(i)`) and said "Rates in force", which the row genuinely says — but it dropped the row's **"Threshold limit: Rs. 20,000"**. So `table_exact` 0.667 is a *generation* gap (one field missed from a passage it already had), not retrieval and not hallucination. A prompt change ("report every rate, threshold and condition in the cited row") is the fix, not Phase 5's retrieval work.
     - **Amendment questions refuse,** confirming the 0.06 amendment recall end-to-end.
+- **Phase 5, v3 hybrid retrieval — retrieval DONE (2026-10-04).** Write-up in `results/ladder.md`.
+  - v3 keeps v2's chunks and changes retrieval only: dense k-NN fused by RRF with two
+    provision-id lookups driven by references parsed from the question
+    (`src/statnav/retrieve/ids.py`). The parser resolves the exact gold id for **all 48**
+    amendment questions in the golden set.
+  - Retrieval on dev (n = 138), v3 against v2:
+
+    | | recall@5 | MRR | hit@1 |
+    |---|---|---|---|
+    | v2 | 0.589 | 0.578 | 0.516 |
+    | **v3** | **0.879** | **0.882** | **0.831** |
+
+    Per type recall@5 / MRR / hit@1 — amendment **0.061/0.028/0.000 → 1.000/1.000/1.000**;
+    multi-hop 0.500/0.621/0.500 → 0.656/0.829/0.750; lookup 0.914/0.843/0.800 →
+    0.914/0.826/0.771; table 0.958/0.892/0.833 → 0.958/0.872/0.792.
+  - **Amendment retrieval is solved.** Every dev amendment question now ranks its gold
+    provision first. Lookup/table recall@5 is untouched; their hit@1 is within one question of
+    v2 (24 table questions = 0.042 each).
+  - Two corrections found by measurement, not design (both are why the config is shaped as it is):
+    - Boosting only the *exact* id drove **table hit@1 0.833 → 0.000**: section 393's own chunk
+      is a 36-token heading and the rates live in `s393:tbl1#...`, so a stub took rank 1. Fixed
+      by a second retriever (`under`) returning the provision *and descendants* ordered by
+      embedding similarity — ids give the candidate set, the embedding gives the order.
+    - Ordering only by embedding then lost amendment again (1.000 → 0.121). Fixed by fusing
+      both lists and dropping from the exact list any heading stub or **container** (a provision
+      whose content sits in deeper chunks). That test is structural, so it separates "the
+      question names the answer" from "the question names where to look" **without a question
+      classifier**. MRR 0.848 → 0.882, table hit@1 0.583 → 0.792.
+  - **FTS is implemented, tested and OFF.** `ts_rank` has no IDF and `simple` keeps stop words,
+    so a natural question ANDed matches nothing (verified 0 rows) and OR-ing ranks badly. Even
+    restricted to rare terms it cost lookup (0.800 vs 0.914). It *did* lift multi-hop (0.719 vs
+    0.656), so `retrievers: [dense, fts, ids, under]` stays available for v4.
+  - **Retrieval recall does not reach amendment *answers* yet.** Asked "How was section 99(2)
+    amended by the Finance Act, 2026?", v3 retrieves `v2:s99(2)` at rank 1 and still refuses:
+    the chunk carries only the `[...]` brackets marking amended text, while the endnote (type
+    `substituted`, `amending_act`, `prior_text`) sits in the `amendments` / `amendment_links`
+    tables and is never attached. The oracle gets those endnotes, which is why it reaches
+    amendment type 0.667 against v2's 0.167. **Attaching linked endnotes to retrieved
+    provisions is the next real win** (planned as v6) and is the prerequisite for amendment
+    answers, not more retrieval work.
+  - Cost: **0 API tokens** for the whole retrieval phase (dev query embeddings cached, id
+    lookups are pure Postgres).
+- **v4, amendment endnotes in the evidence — BUILT (2026-10-04), end-to-end measurement pending.**
+  - `src/statnav/retrieve/amend.py` appends each retrieved chunk's linked endnotes to its own
+    text (and re-counts tokens, or packing would overflow the budget). Enabled by
+    `retrieval: {endnotes: true}` in `configs/versions/v4.yaml`. It uses the same
+    `Endnote {label}: {header} {prior_text}` shape the oracle context uses, so v4 and the
+    ceiling are directly comparable.
+  - **Why it exists:** v3 ranks `v2:s99(2)` first for "How was section 99(2) amended?" and still
+    refuses. The chunk carries only the `[...]` brackets marking amended words; the change is in
+    the endnote, which the chunkers keep out of the chunk. v4 now puts this in the rank-1
+    passage:
+    `Endnote 11: Sub. for "sub-section (1)(a)(i) or (b)" by Act No. 4 of 2026, w.e.f. 1-4-2026.`
+  - `header` carries the change type, the replaced words and the effective date, and is present
+    for all 152 endnotes; `prior_text` is populated for 76 of them.
+  - Evidence cost on dev, v4 against v3: +260 tokens on average (1,765 -> 2,025), max 4,241
+    against the 4,500 budget, so nothing is truncated. Per type: table +648 (the largest, and
+    the least likely to need it), amendment +309, multi-hop +194, refusal +152, lookup +50.
+  - Ladder numbering deviates from the plan deliberately: the plan has v4 as cross-reference
+    expansion and v6 as amendment linking, but measurement showed endnotes, not
+    cross-references, are what block amendment answers.
 - Earlier Phase 3 notes:
   - **222 candidates** in `evals/data/candidates.jsonl`: lookup 54 (32 templated definitions + 22 LLM-drafted numeric), table 45, amendment 48, multi-hop 45 (LLM-drafted from cross-reference pairs), refusal 30. Drafting used ~40K gpt-oss-20b tokens.
   - **All 222 accepted into `evals/data/golden.jsonl`.** The user reviewed 2 individually and then explicitly instructed bulk acceptance of the other 220 (2026-10-02). These are logged as `bulk-accept (user instruction)` in `verification_log.csv`. They were not individually edited, so the README must say the questions were spot-checked, not individually verified.
@@ -143,17 +204,35 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
   - chunks `v2:<id>`; table notes `v2:s393:tbl1:note3`; window chunks `v0:<n>`
 
 ## Next steps (in order)
-1. **Phase 5 — v3 hybrid retrieval (IN PROGRESS).** Postgres FTS + dense with RRF, the Jina reranker (`jina-reranker-v3.5`, cached) and an exact section-ID boost. The target is **amendment retrieval, stuck at 0.06 recall@5 at every version** because dense embeddings can't match on provision numbers; the section-ID boost is the specific fix. Lookup (0.91) and table (0.96) are already near ceiling, so the headroom is amendment and multi-hop (~0.50).
-   - Add `configs/versions/v3.yaml`, extend `src/statnav/retrieve/` with FTS + RRF + rerank, then:
-     ```
-     .venv/Scripts/python.exe -m evals.run --version v3 --split dev --retrieval-only
-     .venv/Scripts/python.exe -m evals.run --version v3 --split dev_mini
-     .venv/Scripts/python.exe -m evals.report --split dev
-     ```
-   - Reranker calls are paid Jina usage — **ask before the first live rerank run** and check the token estimate.
-   - Budget the end-to-end run: ~50K Groq tokens per dev_mini version against the 200K/day cap, so at most ~3 full dev_mini runs per day.
-2. **Phases 6–11 per the plan:** LangGraph agent with cross-reference expansion (targets multi-hop), table/amendment routing, citation verifier, MCP + FastAPI, Vite frontend, CI + README.
-3. Optional: reword the templated table questions in **dev** that copy row text, since they inflate table scores. The test split is frozen, so it can't change.
+
+**Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
+
+1. **Finish v3 end-to-end on dev_mini**, then report and write up the v3 row in
+   `results/ladder.md`. Retrieval on dev is already done and reportable (recall@5 0.879).
+   ```
+   .venv/Scripts/python.exe -m evals.run --version v3 --split dev_mini   # resumes from cache
+   .venv/Scripts/python.exe -m evals.report --split dev_mini
+   ```
+   - **Groq's per-minute limit, not the daily cap, is what truncates these runs.** A dev_mini
+     run completes ~6 questions then gets a provider 429 with a 400-900s backoff, while the
+     daily ledger is nowhere near 200K. Re-run it repeatedly: answers are cached, so each pass
+     resumes and adds a few more. Only trust a run whose `run_meta.json` has
+     `n_completed == n_questions` and no `incomplete` field.
+2. **Attach linked amendment endnotes to retrieved provisions (free, pure Postgres).** This is
+   the real next win and the prerequisite for amendment *answers*. v3 now ranks the right
+   provision first for every amendment question, yet still refuses, because the chunk carries
+   only the `[...]` brackets while the endnote (`type`, `amending_act`, `prior_text`) sits
+   unused in the `amendments` / `amendment_links` tables. The oracle is given those endnotes and
+   reaches amendment type 0.667 against v2's 0.167. Planned as v6; worth pulling forward, since
+   more retrieval work cannot fix this.
+3. **Phases 6–11 per the plan:** LangGraph agent with cross-reference expansion (targets
+   multi-hop, 0.656), table/amendment routing, citation verifier, MCP + FastAPI, Vite frontend,
+   CI + README.
+4. Consider a prompt step that makes table answers report **every** field of a cited row: the
+   model retrieves the right row and faithfully reports the rate but drops the threshold. Keep
+   it as its own ladder version so it is not confounded with a retrieval change.
+5. Optional: reword the templated table questions in **dev** that copy row text, since they
+   inflate table scores. The test split is frozen, so it can't change.
 
 ## Known issues
 - **Tables:** section 204's unnumbered rate table has 0 rows; section 352's table has stray `(i)` text before row 1; section 52's table row 3 has one stray word.
@@ -169,6 +248,14 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - **Table answers drop fields they already retrieved.** The model returns the right row but omits a second column (e.g. the Rs. 20,000 threshold on `s393:tbl1#1(i)`). This is a generation gap, not retrieval — a prompt change is the fix, and it should be a *separate* ladder step so it isn't confounded with v3's retrieval changes.
 - **The per-minute rate limiter is in-process only.** The daily ledger is shared in `.cache/llm.sqlite`, but the 8K tokens/min window lives in each `ChatClient`. So running the chat right after an eval run triggers real provider 429s (`QuotaExhausted: provider says retry after ...`, seen up to ~1000s) even with the daily cap nowhere near. Leave a few minutes between an eval run and interactive use, or persist the window.
 - **Citation parsing is case-sensitive:** a lowercase `"c1"` from the model is silently dropped. Pinned by `tests/test_answer.py::test_parse_citations_is_case_sensitive_today`, because widening it would move the committed citation scores. Revisit when a version changes the prompt.
+- **Groq's per-minute limit, not the daily cap, is the real throughput constraint.** A dev_mini
+  end-to-end run completes ~6 questions and then gets a provider 429 with a 200-900s
+  `Retry-After`, while the daily ledger sits far below the 200K cap (60K when this was hit). A
+  429'd call appears to count against the window, so eager retries keep extending it: sleep the
+  provider's own reported retry-after plus a margin. `llm/client.py` raises `QuotaExhausted` for
+  a provider 429 as well as for the daily cap, so the two look the same in `run_meta.json` --
+  check the message to tell them apart. Budget a dev_mini end-to-end run as **hours of
+  wall-clock, not tokens**.
 - **Git:** public repo https://github.com/SWAYAM1310/income-tax-act-2025-navigator (branch `main`). The `gh` CLI is at `C:\Program Files\GitHub CLI\gh.exe`, logged in as SWAYAM1310. Ask before committing or pushing.
 
 ## Environment gotchas

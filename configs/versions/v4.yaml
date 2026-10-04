@@ -1,0 +1,26 @@
+# v4: v3's hybrid retrieval plus the Act's amendment endnotes attached to the provisions they
+# amend.
+#
+# v3 made amendment retrieval perfect (recall@5 0.061 -> 1.000) without improving amendment
+# answers: it ranks the named provision first and still refuses, because a chunk carries only
+# the `[...]` brackets marking amended words. What changed is in the endnotes, which the
+# chunkers keep out of the chunk text -- e.g. for s99(2):
+#   Sub. for "sub-section (1)(a)(i) or (b)" by Act No. 4 of 2026, w.e.f. 1-4-2026.
+# The oracle is given these endnotes and reaches amendment type 0.667 against v2's 0.167, so
+# this closes an evidence gap rather than a retrieval one. Retrieval metrics are unchanged from
+# v3 by construction; the gain shows up in amendment type and fact recall.
+#
+# Note: the project plan numbers amendment linking v6 and cross-reference expansion v4. The
+# order is swapped here because measurement showed endnotes, not cross-references, are what
+# blocks amendment answers.
+description: Hybrid retrieval plus linked amendment endnotes in the evidence
+chunks: v2
+retrieval:
+  mode: hybrid
+  k: 10
+  pool: 30
+  retrievers: [dense, ids, under]
+  weights: {dense: 1.0, ids: 2.0, under: 1.0, fts: 1.0}
+  endnotes: true
+evidence_budget: 4500
+generation: {prompt: basic}

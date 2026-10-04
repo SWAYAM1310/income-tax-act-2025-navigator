@@ -23,6 +23,7 @@ from statnav.answer import Answer, Answerer
 from statnav.obs.logging import configure
 
 WRAP = 96
+VERSIONS = {"v0", "v1", "v2", "v3", "v4"}
 
 
 def _fmt(res: Answer, show_evidence: bool) -> str:
@@ -60,7 +61,7 @@ def _fmt(res: Answer, show_evidence: bool) -> str:
 HELP = """commands:
   /evidence        toggle printing the passages sent to the model
   /k <n>           retrieve n passages (default: the version's k)
-  /version <v>     switch ladder version (v0, v1, v2)
+  /version <v>     switch ladder version (v0, v1, v2, v3, v4)
   /tokens          Groq tokens spent today
   /quit            exit"""
 
@@ -92,12 +93,12 @@ def repl(bot: Answerer, show_evidence: bool) -> None:
                 k = int(arg) if arg.isdigit() else None
                 print(f"k = {k or bot.k}")
             elif cmd == "version":
-                if arg in {"v0", "v1", "v2"}:
+                if arg in VERSIONS:
                     bot.close()
                     bot = Answerer.for_version(arg)
                     print(f"version {arg} (chunks {bot.chunks}, k={bot.k})")
                 else:
-                    print("version must be v0, v1 or v2")
+                    print(f"version must be one of {', '.join(sorted(VERSIONS))}")
             elif cmd == "tokens":
                 print(f"{bot.llm.model}: {bot.llm.spent_today():,} tokens spent today")
             else:
@@ -109,7 +110,8 @@ def repl(bot: Answerer, show_evidence: bool) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Ask the Income-tax Act, 2025 a question.")
     ap.add_argument("question", nargs="*", help="omit for an interactive session")
-    ap.add_argument("--version", default="v2", help="ladder version (default: v2, the best)")
+    ap.add_argument("--version", default="v4",
+                    help="ladder version (default: v4, the best)")
     ap.add_argument("-k", type=int, default=None, help="passages to retrieve")
     ap.add_argument("--evidence", action="store_true", help="print the passages sent")
     ap.add_argument("--verbose", action="store_true", help="show the JSON pipeline logs")
