@@ -2,7 +2,7 @@
 
 _Last updated: 2026-10-06. **Phases 0-6 are DONE: the ladder v0-v5 is measured end-to-end.** v5 on dev_mini: fact recall 0.771 (oracle 0.833), citation precision 0.917, amendment type 0.833; dev retrieval recall@5 0.923. All end-to-end numbers were **rescored on 2026-10-06** after a `2 %` (U+202F) normalisation fix. A working chatbot exists (`python -m statnav.chat`). Update this file at the end of every session or phase._
 
-> **Resume here:** see "Next steps" step 1 (Phase 7+). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). The 2026-10-06 results + metric fix are **uncommitted** (ask before committing).
+> **Resume here:** see "Next steps" step 1 (Phase 7+). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). The 2026-10-06 work is committed and pushed (8a1cc24).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -243,8 +243,6 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
-0. **Ask the user whether to commit** the 2026-10-06 work: the v3/v4/v5 dev_mini results, the
-   rescored v0-v2/oracle results, the `norm()` fix + tests, `results/ladder.md`, and the report.
 1. **Phases 7–11 per the plan** (the retrieval ladder through v5 is built; v4 endnotes and v5
    cross-reference expansion are done): LangGraph agent with table/amendment routing and a
    citation verifier, MCP + FastAPI, Vite frontend, CI + README. The chat already works
