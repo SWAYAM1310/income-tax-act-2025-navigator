@@ -1,0 +1,22 @@
+{
+  "version": "oracle",
+  "split": "dev:substitution",
+  "config": {
+    "description": "Oracle context - gold provisions given directly (generation upper bound)",
+    "chunks": "oracle",
+    "retrieval": {
+      "mode": "oracle"
+    },
+    "evidence_budget": 4500,
+    "generation": {
+      "prompt": "basic"
+    }
+  },
+  "n_questions": 10,
+  "n_completed": 10,
+  "retrieval_only": false,
+  "answer_model": "openai/gpt-oss-120b",
+  "timestamp": "2026-10-06T17:24:23+00:00",
+  "jina_tokens_billed": 0,
+  "incomplete": null
+}

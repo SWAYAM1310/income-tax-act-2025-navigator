@@ -1,0 +1,66 @@
+{
+  "n": 138,
+  "hit@1": 0.871,
+  "hit@10": 0.9839,
+  "hit@5": 0.9758,
+  "mrr": 0.9132,
+  "recall@1": 0.7742,
+  "recall@10": 0.9597,
+  "recall@5": 0.9395,
+  "scope_refused": 0.1014,
+  "scope_precision": 1.0,
+  "scope_recall": 1.0,
+  "by_type": {
+    "amendment": {
+      "n": 33,
+      "hit@1": 1.0,
+      "hit@10": 1.0,
+      "hit@5": 1.0,
+      "mrr": 1.0,
+      "recall@1": 1.0,
+      "recall@10": 1.0,
+      "recall@5": 1.0,
+      "scope_refused": 0.0
+    },
+    "lookup": {
+      "n": 35,
+      "hit@1": 0.9143,
+      "hit@10": 0.9714,
+      "hit@5": 0.9714,
+      "mrr": 0.9357,
+      "recall@1": 0.9143,
+      "recall@10": 0.9714,
+      "recall@5": 0.9714,
+      "scope_refused": 0.0
+    },
+    "multi_hop": {
+      "n": 32,
+      "hit@1": 0.75,
+      "hit@10": 0.9688,
+      "hit@5": 0.9688,
+      "mrr": 0.8318,
+      "recall@1": 0.375,
+      "recall@10": 0.875,
+      "recall@5": 0.8281,
+      "scope_refused": 0.0
+    },
+    "refusal": {
+      "n": 14,
+      "scope_refused": 1.0
+    },
+    "table": {
+      "n": 24,
+      "hit@1": 0.7917,
+      "hit@10": 1.0,
+      "hit@5": 0.9583,
+      "mrr": 0.8698,
+      "recall@1": 0.7917,
+      "recall@10": 1.0,
+      "recall@5": 0.9583,
+      "scope_refused": 0.0
+    }
+  },
+  "classify_tokens_mean": 422.0,
+  "jina_tokens_mean": 0,
+  "incomplete": null
+}

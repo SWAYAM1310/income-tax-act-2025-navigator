@@ -1,11 +1,11 @@
 {
   "n": 30,
-  "all_facts": 0.5,
+  "all_facts": 0.5417,
   "all_facts_exact": 0.4167,
   "amendment_type": 0.1667,
   "citation_precision": 0.7292,
   "citation_recall": 0.6458,
-  "fact_recall": 0.5625,
+  "fact_recall": 0.6042,
   "fact_recall_exact": 0.4375,
   "grounded_numbers": 0.7719,
   "hit@1": 0.8333,
@@ -22,12 +22,12 @@
   "by_type": {
     "amendment": {
       "n": 6,
-      "all_facts": 0.0,
+      "all_facts": 0.1667,
       "all_facts_exact": 0.0,
       "amendment_type": 0.1667,
       "citation_precision": 0.3333,
       "citation_recall": 0.3333,
-      "fact_recall": 0.0,
+      "fact_recall": 0.1667,
       "fact_recall_exact": 0.0,
       "grounded_numbers": 0.2778,
       "hit@1": 1.0,

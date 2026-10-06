@@ -1,8 +1,8 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-06. **Phases 0-10 are DONE.** Ladder v0-v7 measured; best is v6 (LangGraph agent over v5): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00; dev recall@5 0.940. v7 (verifier gate) = v6 at +83% tokens (mutation test pending). FastAPI + MCP server serve v6; the Vite frontend (`frontend/`) is built and smoke-tested. Next: Phase 11 (CI, final test-split runs, README). Update this file at the end of every session or phase._
+_Last updated: 2026-10-06. **Phases 0-10 DONE; Phase 11 IN PROGRESS.** Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Final test-split runs are queued (`scripts/final_runs.sh`). Update this file at the end of every session or phase._
 
-> **Resume here:** see "Next steps" step 1. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). Phase 6 is committed (8a1cc24); **the Phase 7-10 work (v6, v7, API, MCP, frontend) is uncommitted** (ask before committing).
+> **Resume here:** see "Next steps" step 1 (Phase 11 is mid-way: final test runs queued). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). Phase 6 is committed (8a1cc24); Phases 7-10 are committed and pushed (56dfec8); **the Phase 11 work so far is uncommitted** (ask before committing).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -237,6 +237,42 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     `tasks.py check` once the API/MCP tests kept a connection open). `connect(autocommit=True)`
     is now used by `Answerer` and the API.
   - 136 offline tests pass (`tasks.py check`, which now also lints `scripts/`).
+- **Phase 11, CI + packaging + final numbers + README — IN PROGRESS (2026-10-06, uncommitted).**
+  - **v8 (new ladder step).** `amendment_direction` metric (`evals/metrics.py`; for the 13
+    amendment questions whose endnote quotes the replaced words, reads "from X to Y" / "X replaced
+    by Y" / "Y substituted for X"; abstains otherwise) showed answers stating substitutions
+    backwards (`Sub. for "60%"` read as "substituted with 60%"). v8 = v6 + `endnotes: explicit`
+    (`retrieve/amend.py`: `wording before: "60%"; wording now: "30%"`, `inserted (not in the Act
+    before): "..."`). Dev substitutions (n=10, `--split dev:substitution`): direction right v6 0/3,
+    oracle 2/6, **v8 7/7**; fact recall 0.90 → 0.95; same tokens. dev_mini: v8 = v6 on every other
+    metric. Retrieval identical (dev recall@5 0.940). **v8 is now the default** (chat, API, MCP,
+    UI).
+  - **Metric fix:** a gold fact that is only a change type ("substituted") accepts the
+    `amendment_type` stems ("replaced"); it had rewarded v6's backwards answer over v8's correct
+    one. All versions rescored from cache (v3 0.562 → 0.604, v4 0.708 → 0.771 fact recall).
+  - `evals/run.py`: pseudo-splits `<split>:<type>` and `<split>:substitution` (results in
+    `results/<v>/<split>_<filter>/`); `--final` now verifies `test.ids` against `test.sha256`.
+  - **CI:** `.github/workflows/ci.yml` (keyless): python job (uv sync --locked, ruff, pytest -m
+    "not jina and not db") + frontend job (npm ci, oxlint, build, Playwright). Verified locally in
+    a fresh clone (112 pass, 14 skip for the missing PDF). Not yet run on GitHub (needs a push).
+  - **Docker:** `Dockerfile` (API), `frontend/Dockerfile` + `nginx.conf` (static UI, `/api`
+    proxy with SSE unbuffered), `docker-compose.yml` now db + api (:8000) + web (:8080). Tested:
+    `docker compose up -d --wait` → health, provisions and a full SSE answer through nginx.
+  - **DB dump/restore:** `scripts/db_dump.sh` / `db_restore.sh` (pg_dump custom format, 19 MB);
+    verified a restore into an empty pgvector container (8,108 provisions, 4,606 chunks, HNSW
+    index). Not published anywhere yet: publishing it (e.g. as a GitHub release asset) is the
+    user's call.
+  - **README.md rewritten** (results table v0-v8 + oracle, what the ladder shows, caveats,
+    architecture, run instructions, repo map). The test-split section is *pending*.
+  - **Test split so far (retrieval-only, 0 tokens):** recall@5 / MRR: v0 0.493/0.403, v1
+    0.507/0.413, v2 0.640/0.586, v3 0.904/0.849, v4 same, v5 0.912/0.850. v5's multi-hop gain
+    is smaller on test (+0.04 vs +0.17 on dev) and it costs a table question (0.952 → 0.905), as
+    the tuned-on-dev caveat predicted.
+  - **Queued (background, starts 00:40 UTC 2026-10-07):** `bash scripts/final_runs.sh` → v6 + v8
+    retrieval-only, then end to end v8, oracle, v2, v5, v0 on test (~1.0M gpt-oss-120b tokens
+    total, ~5-6 Groq days), sleeping through the daily cap; log in the session scratchpad.
+    If the session ended, re-run the script: it resumes from the cache. Also scheduled: the v7
+    mutation test at 00:20 UTC.
 - **Phase 10, Vite + React + TS frontend — DONE (2026-10-06, uncommitted).** `frontend/`
   (README there). Two views: *Ask the Act* (question → streamed agent steps → answer + citation
   chips; a citation opens the "statute sheet": marginal note = section heading, clause hierarchy,
@@ -315,6 +351,10 @@ cd frontend && npm run test:e2e                                # Playwright smok
 .venv/Scripts/python.exe -m evals.run --version v0 --split dev_mini            # end-to-end (Groq)
 .venv/Scripts/python.exe -m evals.run --version oracle --split dev_mini
 .venv/Scripts/python.exe -m evals.report --split dev
+.venv/Scripts/python.exe -m evals.run --version v8 --split dev:substitution  # filtered pseudo-split
+bash scripts/final_runs.sh                                     # final test-split runs (multi-day)
+bash scripts/db_dump.sh out.dump / bash scripts/db_restore.sh out.dump
+docker compose up                                              # db + api :8000 + web :8080
 ```
 Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverified) and `smoke` (`evals/data/smoke_ids.txt`).
 
@@ -339,23 +379,25 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
-1. **Check the v7 mutation test** (scheduled for 00:20 UTC 2026-10-07; see Phase 8 above) and
-   fill its result into `results/ladder.md` (marked *pending*). If it did not run, run
-   `python -m evals.verifier_check --version v6 --split dev_mini` (~29K gpt-oss-20b tokens).
-2. **Phase 11: CI, packaging, final numbers, README** (plan: GitHub Actions with lint + offline
-   tests + a retrieval-only eval on 30 dev questions using committed caches so CI needs no keys;
-   `docker compose up` for db + API + frontend; **final test-split runs** (frozen split, 84
-   questions: v0, v2, v5, v6, oracle end-to-end ≈ 84 × 2.5K ≈ 210K gpt-oss-120b tokens per
-   version, i.e. several Groq days — plan the order); README with the ladder, the honest caveats
-   (bulk-accepted golden set, tuned-on-dev choices, v7 negative result) and the frontend).
-   Consider an amendment-direction metric first (see Known issues), since test numbers are final.
+1. **Check the v7 mutation test** (`results/v7/dev_mini/verifier_check_v6.json`, scheduled for
+   00:20 UTC 2026-10-07) and fill it into the Phase 8 section of `results/ladder.md`
+   (*pending*). If it did not run: `python -m evals.verifier_check --version v6 --split dev_mini`.
+2. **Finish Phase 11:**
+   - let `scripts/final_runs.sh` finish (check `results/<v>/test/run_meta.json`: n_completed ==
+     n_questions, no `incomplete`), then `python -m evals.report --split test` and fill the
+     "Final numbers on the frozen test split" section of README.md and a Phase 11 test table in
+     `results/ladder.md`;
+   - ask the user to commit/push (that also runs CI on GitHub for the first time) and whether
+     to publish the DB dump (release asset) so a fresh clone can run without the PDF + Jina;
+   - optionally a CI retrieval eval once a dump is published (the plan's "retrieval-only eval on
+     30 dev questions" needs the dump + committed query-embedding cache).
 3. Consider a prompt step that makes table answers report **every** field of a cited row: the
    model retrieves the right row and faithfully reports the rate but drops the threshold
    (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`, seen in the chat). Lower priority now: after the
    rescore, table fact recall is 1.00 on dev_mini from v2 on. Keep it as its own ladder version so
    it is not confounded with a retrieval change. The same step could ask the model to quote
    table cells verbatim ("Rates in force").
-4. Before reporting on **test**, run v6 (and oracle) end-to-end on more than dev_mini's 30
+4. (Superseded by step 2's final runs.) Before reporting on **test**, run v6 (and oracle) end-to-end on more than dev_mini's 30
    questions; per-type differences on dev_mini are one question (0.17) each. A full dev run is
    ~138 × 2.4K ≈ 330K tokens, i.e. two Groq days.
 5. Optional: FTS (`retrievers: [dense, fts, ids, under]`) lifted multi-hop on dev but cost
@@ -364,8 +406,8 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
    inflate table scores. The test split is frozen, so it can't change.
 
 ## Known issues
-- **Amendment answers can state the direction of a substitution backwards, and no metric sees
-  it.** v6 on s99(2) says "from (1)(a)(ii) to (1)(a)(i)"; it was (a)(i) → (a)(ii) (the oracle made
+- **(Fixed in v8, measured by `amendment_direction`.) Amendment answers could state the
+  direction of a substitution backwards.** v6 on s99(2) says "from (1)(a)(ii) to (1)(a)(i)"; it was (a)(i) → (a)(ii) (the oracle made
   the same mistake earlier). `amendment_type` checks only the change-type word, `prior_text_f1` is
   undefined when the gold has no prior text. A direction check (does the answer put the endnote's
   "Sub. for" words on the *old* side?) would catch it; `repo.before_after` already knows both sides.

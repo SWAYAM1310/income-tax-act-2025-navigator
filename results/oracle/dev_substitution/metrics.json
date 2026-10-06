@@ -1,0 +1,34 @@
+{
+  "n": 10,
+  "all_facts": 0.8,
+  "all_facts_exact": 0.4,
+  "amendment_direction": 0.3333,
+  "amendment_type": 0.9,
+  "citation_precision": 1.0,
+  "citation_recall": 1.0,
+  "fact_recall": 0.9,
+  "fact_recall_exact": 0.7,
+  "grounded_numbers": 1.0,
+  "refusal_precision": null,
+  "refusal_recall": null,
+  "by_type": {
+    "amendment": {
+      "n": 10,
+      "all_facts": 0.8,
+      "all_facts_exact": 0.4,
+      "amendment_direction": 0.3333,
+      "amendment_type": 0.9,
+      "citation_precision": 1.0,
+      "citation_recall": 1.0,
+      "fact_recall": 0.9,
+      "fact_recall_exact": 0.7,
+      "grounded_numbers": 1.0
+    }
+  },
+  "latency_p50_s": 0.84,
+  "latency_p95_s": 1.33,
+  "llm_tokens_mean": 937.3,
+  "jina_tokens_mean": 0,
+  "evidence_tokens_mean": 424.8,
+  "incomplete": null
+}

@@ -96,9 +96,16 @@ def _content(text: str) -> list[str]:
 def fact_match(answer: str, fact: str) -> bool:
     """Exact (normalised) containment, or soft: >= 80% of the fact's content words appear in
     the answer and every number in the fact appears exactly. Tolerates paraphrase such as
-    'up to thirty days' vs 'not exceeding thirty days' without letting wrong numbers pass."""
+    'up to thirty days' vs 'not exceeding thirty days' without letting wrong numbers pass.
+
+    A fact that is only a change type ("substituted") accepts the same stems as
+    `amendment_type`: otherwise "replace "60%" with "30%"" (right) scored below "changed from
+    30% to 60%" (backwards, but containing the word "substituted")."""
     if contains(answer, fact):
         return True
+    stems = TYPE_STEMS.get(fact.strip().lower())
+    if stems:
+        return any(s in answer.lower() for s in stems)
     words = _content(fact)
     if not words:
         return False
@@ -144,7 +151,75 @@ def generation_metrics(q: dict, out: dict, cited_chunks: list[dict]) -> dict:
         m["amendment_type"] = float(any(s in answer.lower() for s in TYPE_STEMS[ga["type"]]))
         if ga.get("prior_text"):
             m["prior_text_f1"] = token_f1(answer, ga["prior_text"])
+        pair = substitution_pair(q)
+        if pair:
+            d = amendment_direction(answer, *pair)
+            if d is not None:
+                m["amendment_direction"] = d
     return m
+
+
+# -- amendment direction ------------------------------------------------------------------
+# `amendment_type` only checks the change-type word, so an answer that states a substitution
+# backwards still scores 1. v6 said s99(2) changed "from (1)(a)(ii) to (1)(a)(i)"; the endnote
+# `Sub. for "sub-section (1)(a)(i) or (b)"` says (a)(i) is the *old* wording. For the
+# substitutions whose endnote quotes the replaced words (16 of the 48 amendment questions),
+# this finds both wordings in the answer and reads the connective between them.
+_SUB_FOR = re.compile(r"[Ss]ubs?\.\s+for\s+[\"“](.+?)[\"”]")
+#: "<new> for <old>", "<new> in place of <old>": the second phrase is the old wording
+_OLD_SECOND = re.compile(r"\b(?:for|in place of|instead of)\s*$")
+#: "from <old> to <new>", "<old> replaced by/with <new>", "<old> became <new>"
+_OLD_FIRST = re.compile(r"\b(?:to|with|by|became|becomes|into|now reads?)\s*$")
+
+
+def substitution_pair(q: dict) -> tuple[str, str] | None:
+    """(old words, new words) for a word substitution the gold endnote quotes, else None."""
+    ga = q.get("gold_amendment") or {}
+    if ga.get("type") != "substituted" or not ga.get("footnote"):
+        return None
+    a = artefacts()
+    note = next((x for x in a["amendments"] if x["key"] == ga["footnote"]), None)
+    old = _SUB_FOR.search(note["header"]) if note else None
+    if not old:
+        return None
+    label = re.escape(ga["footnote"].split("@")[0])
+    for pid in gold_targets(q):
+        marked = (a["provisions"].get(pid) or {}).get("text_marked") or ""
+        new = re.search(rf"\{{\{{fn:{label}\}}\}}\[([^\]]*)\]", marked)
+        if new and new.group(1).strip():
+            return old.group(1).strip(), new.group(1).strip()
+    return None
+
+
+def _first(text: str, s: str, other: str) -> int:
+    """First index of `s` in `text` that is not inside an occurrence of `other`."""
+    spans = [(m.start(), m.start() + len(other)) for m in re.finditer(re.escape(other), text)]
+    for m in re.finditer(re.escape(s), text):
+        if not any(a <= m.start() and m.end() <= b for a, b in spans):
+            return m.start()
+    return -1
+
+
+def amendment_direction(answer: str, old: str, new: str) -> float | None:
+    """1.0 if the answer puts `old` on the old side, 0.0 if it states the change backwards,
+    None if it does not quote both wordings or the connective between them is unclear."""
+    a, o, n = norm(answer), norm(old), norm(new)
+    if not o or not n or o == n:
+        return None
+    i_old, i_new = _first(a, o, n), _first(a, n, o)
+    if i_old < 0 or i_new < 0:
+        return None
+    first, second = (o, n) if i_old < i_new else (n, o)
+    between = a[min(i_old, i_new) + len(first): max(i_old, i_new)]
+    if len(between) > 60:
+        return None
+    if _OLD_SECOND.search(between):
+        said_old = second
+    elif _OLD_FIRST.search(between):
+        said_old = first
+    else:
+        return None
+    return float(said_old == o)
 
 
 # -- aggregation ---------------------------------------------------------------------------

@@ -1,3 +1,10 @@
+# docker compose up            -> db (:5433), api (:8000), web (http://localhost:8080)
+# docker compose up -d db      -> just Postgres, for development (tasks.py check does this)
+#
+# The database must hold the index: either build it (statnav.ingest.build + index.load +
+# index.build, which needs the source PDF and Jina) or restore a dump (scripts/db_restore.sh).
+# The api reads GROQ_API_KEY and JINA_API_KEY from .env; .cache is shared with the host, so
+# answers and query embeddings already cached there replay at no cost.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -15,6 +22,36 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+
+  api:
+    build: .
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # inside the compose network the database is `db` on its own port, whatever .env says
+      POSTGRES_HOST: db
+      POSTGRES_PORT: "5432"
+    volumes:
+      - ./.cache:/app/.cache
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+
+  web:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

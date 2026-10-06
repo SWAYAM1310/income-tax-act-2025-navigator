@@ -30,7 +30,7 @@ from statnav import repo
 from statnav.answer import Answer, Answerer, failed, from_agent
 from statnav.config import CONFIG_DIR, ROOT
 
-DEFAULT_VERSION = "v6"
+DEFAULT_VERSION = "v8"
 #: versions a user can ask (the oracle needs gold provisions)
 VERSIONS = sorted(p.stem for p in (CONFIG_DIR / "versions").glob("v*.yaml"))
 RESULTS = ROOT / "results"

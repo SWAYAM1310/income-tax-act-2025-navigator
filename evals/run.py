@@ -38,6 +38,16 @@ log = get_logger("evals.run")
 
 
 def load_questions(split: str, final: bool) -> list[dict]:
+    """Questions of a split. `<split>:<type>` keeps one question type (`dev:amendment`), and
+    `<split>:substitution` the amendment questions whose endnote quotes the replaced words --
+    the ones `amendment_direction` can score. Their results go to `<split>_<filter>/`."""
+    if ":" in split:
+        base, keep = split.split(":", 1)
+        qs = load_questions(base, final)
+        if keep == "substitution":
+            from evals.metrics import substitution_pair
+            return [q for q in qs if substitution_pair(q)]
+        return [q for q in qs if q["type"] == keep]
     if split == "candidates":
         return [c for c in read_jsonl(CANDIDATES) if c["status"] != "rejected"]
     if split == "smoke":  # a handful of unverified candidates, for pipeline checks only
@@ -46,6 +56,12 @@ def load_questions(split: str, final: bool) -> list[dict]:
         return [by_id[i] for i in ids if i in by_id]
     if split == "test" and not final:
         raise SystemExit("the test split is for reported numbers only: pass --final")
+    if split == "test":
+        from evals.splits import SPLITS_DIR as _S
+        from evals.splits import test_digest
+        frozen = (_S / "test.sha256").read_text(encoding="utf-8").strip()
+        if test_digest((_S / "test.ids").read_text(encoding="utf-8").split()) != frozen:
+            raise SystemExit("test.ids no longer matches the frozen test.sha256; refusing to run")
     path = SPLITS_DIR / f"{split}.ids"
     if not path.exists():
         raise SystemExit(f"{path} missing: verify questions (evals.review), then evals.splits")
@@ -100,7 +116,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
         checker = ChatClient.for_role("verify") if cfg["agent"].get("verify") else None
         agent = Agent(conn, jina, cfg, llm, classify, checker)
 
-    prev_path = RESULTS_DIR / version / split / "outputs.jsonl"
+    prev_path = RESULTS_DIR / version / split.replace(":", "_") / "outputs.jsonl"
     prev_latency = ({r["id"]: r.get("latency_s") for r in read_jsonl(prev_path)}
                     if prev_path.exists() else {})
     records, incomplete = [], None
@@ -186,7 +202,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
 
     metrics = aggregate(records)
     metrics["incomplete"] = incomplete
-    out_dir = RESULTS_DIR / version / split
+    out_dir = RESULTS_DIR / version / split.replace(":", "_")
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2), encoding="utf-8")
     write_jsonl(out_dir / "outputs.jsonl", records)

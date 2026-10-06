@@ -35,7 +35,7 @@ from statnav.agent.verify import verify
 from statnav.answer import generate, pack, passages
 from statnav.llm.client import Reply  # noqa: TC001 - langgraph resolves State hints at runtime
 from statnav.obs.logging import get_logger
-from statnav.retrieve.amend import attach
+from statnav.retrieve.amend import attach, style_of
 from statnav.retrieve.route import as_dicts, retrieve
 
 if TYPE_CHECKING:
@@ -160,9 +160,9 @@ class Agent:
         version = self.cfg["chunks"]
         extra = definition_hits(self.conn, s["definitions"], version,
                                 self.jina.embed_query(s["question"]))
-        if self.cfg["retrieval"].get("endnotes"):
-            extra = attach(self.conn, extra,
-                           structured=self.cfg["retrieval"]["endnotes"] == "structured")
+        style = style_of(self.cfg["retrieval"])
+        if style:
+            extra = attach(self.conn, extra, style)
         k = s.get("k") or self.cfg["retrieval"]["k"]
         # the defining clause goes first; the retrieved list keeps its order after it
         front = as_dicts(extra)

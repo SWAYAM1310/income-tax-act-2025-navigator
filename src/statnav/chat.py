@@ -23,7 +23,7 @@ from statnav.answer import Answer, Answerer
 from statnav.obs.logging import configure
 
 WRAP = 96
-VERSIONS = {"v0", "v1", "v2", "v3", "v4", "v5", "v6"}
+VERSIONS = {"v0", "v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}
 
 
 def _fmt(res: Answer, show_evidence: bool) -> str:
@@ -112,8 +112,8 @@ def repl(bot: Answerer, show_evidence: bool) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Ask the Income-tax Act, 2025 a question.")
     ap.add_argument("question", nargs="*", help="omit for an interactive session")
-    ap.add_argument("--version", default="v6",
-                    help="ladder version (default: v6, the best)")
+    ap.add_argument("--version", default="v8",
+                    help="ladder version (default: v8, the best)")
     ap.add_argument("-k", type=int, default=None, help="passages to retrieve")
     ap.add_argument("--evidence", action="store_true", help="print the passages sent")
     ap.add_argument("--verbose", action="store_true", help="show the JSON pipeline logs")

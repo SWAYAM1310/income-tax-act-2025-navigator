@@ -61,3 +61,30 @@ def test_aggregate_refusal_precision_recall():
     m = aggregate(recs)
     assert m["refusal_precision"] == 0.5 and m["refusal_recall"] == 0.5
     assert m["fact_recall"] == 0.5 and m["by_type"]["lookup"]["n"] == 2
+
+
+@pytest.mark.parametrize("answer,expected", [
+    ('the rate was changed from "60%" to "30%"', 1.0),
+    ('the rate of "60%" was replaced by "30%"', 1.0),
+    ('it substituted "30%" for "60%"', 1.0),
+    ('the rate was changed from "30%" to "60%"', 0.0),   # backwards: v6 on 195(1)(i)
+    ('replaced "30%" with "60%"', 0.0),
+    ('the rate is now 30%', None),                         # only one wording quoted
+    ('"60%" appears, and much later, after a long digression about other things, "30%"', None),
+])
+def test_amendment_direction(answer, expected):
+    from evals.metrics import amendment_direction
+    assert amendment_direction(answer, "60%", "30%") == expected
+
+
+def test_amendment_direction_when_old_is_inside_new():
+    from evals.metrics import amendment_direction
+    old, new = "sub-section (1)(a)(i) or (b)", "sub-section (1)(a)(ii) or (b)"
+    assert amendment_direction(f"changed from {old} to {new}", old, new) == 1.0
+    assert amendment_direction(f"changed from {new} to {old}", old, new) == 0.0
+
+
+def test_a_change_type_fact_accepts_its_synonyms():
+    assert fact_match('to replace the rate of "60%" with "30%"', "substituted")
+    assert fact_match("the clause was newly added", "inserted")
+    assert not fact_match("the clause was newly added", "omitted")

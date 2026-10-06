@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 
-// Captured from the real API (python -m statnav.api, v6) so the UI is tested on real payloads.
+// Captured from the real API (python -m statnav.api) so the UI is tested on real payloads.
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
 
 async function mockApi(page: Page) {
@@ -31,7 +31,8 @@ test('answers with a citation that opens the provision, amended words marked', a
   await page.getByRole('button', { name: /section 99\(2\) amended/ }).click()
   await expect(page.getByText('Wrote the answer from those passages')).toBeVisible()
   const answer = page.locator('article.answer')
-  await expect(answer).toContainText('Finance Act, 2026')
+  await expect(answer).toContainText('(1)(a)(i) or (b)')  // the old and the new wording
+  await expect(answer).toContainText('(1)(a)(ii) or (b)')
   await expect(answer.getByRole('button', { name: /s\. 99\(2\)/ })).toBeVisible()
 
   const sheet = page.getByRole('complementary', { name: 'Provision' })
@@ -53,7 +54,7 @@ test('shows the eval ladder as charts and a table', async ({ page }) => {
   await page.getByRole('button', { name: 'How well it answers' }).click()
   await expect(page.getByRole('img', { name: /Facts found in the answer/ })).toBeVisible()
   await expect(page.getByRole('img', { name: /Right provision in the top 5/ })).toBeVisible()
-  const v6 = page.getByRole('row', { name: /^v6 / })
-  await expect(v6).toContainText('LangGraph agent')
+  const v8 = page.getByRole('row', { name: /^v8 / })
+  await expect(v8).toContainText('wording before and after')
   await expect(page.getByRole('table')).toContainText('oracle')
 })

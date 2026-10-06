@@ -9,7 +9,7 @@ from __future__ import annotations
 import psycopg
 
 from statnav.embed.jina import JinaClient
-from statnav.retrieve.amend import attach
+from statnav.retrieve.amend import attach, style_of
 from statnav.retrieve.dense import Hit, knn
 from statnav.retrieve.hybrid import search as hybrid_search
 
@@ -34,9 +34,11 @@ def retrieve(conn: psycopg.Connection, jina: JinaClient, question: str, cfg: dic
     else:
         raise ValueError(f"retrieval mode {mode!r} has no chat/eval path")
     # what changed lives in the Act's endnotes, not in the provision text
-    # `endnotes: structured` (v6) also states the parsed change type in words
-    if r.get("endnotes"):
-        hits = attach(conn, hits, structured=r["endnotes"] == "structured")
+    # `endnotes: structured` (v6) states the change type in words; `explicit` (v8) also the
+    # wording before and after
+    style = style_of(r)
+    if style:
+        hits = attach(conn, hits, style)
     return hits
 
 

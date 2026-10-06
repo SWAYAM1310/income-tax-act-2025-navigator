@@ -12,7 +12,10 @@ Setup for every run:
   version was rescored from the same cached answers (answers, retrieval and citations
   byte-identical; 0 LLM tokens). This lifted table exact for v1-v5 and the oracle alike. A
   second pass the same day also maps "2 per cent" / "2 percent" (the Act's own wording) to
-  "2%", which lifted v0 too. Pre-fix numbers are in git history.
+  "2%", which lifted v0 too. A third pass lets a gold fact that is only a change type
+  ("substituted") accept the same stems as `amendment_type` ("replaced"), after it was found
+  rewarding a backwards answer over a correct one (Phase 11). Pre-fix numbers are in git
+  history.
 - **v3-v5 dev_mini were re-run on 2026-10-06** after a retrieval bug fix (see Phase 7): their
   subtree and cross-reference lookups were silently dropping candidates. Dev recall, MRR and
   hit@1 were unchanged, but the evidence changed on 4-5 dev_mini questions per version, so those
@@ -163,8 +166,8 @@ were what blocked amendment *answers*, so amendment linking came before cross-re
 | | Fact recall | Citation precision | Citation recall | Grounded numbers | Table exact | Amendment type | Prior-text F1 | Refusal precision / recall | Evidence tok | LLM tok/q |
 |---|---|---|---|---|---|---|---|---|---|---|
 | v2 | 0.583 | 0.646 | 0.583 | 0.683 | 1.000 | 0.167 | 0.116 | 0.42 / 0.83 | 1,628 | 2,155 |
-| v3 | 0.562 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.137 | 0.50 / 0.83 | 1,600 | 2,126 |
-| v4 | 0.708 | 0.896 | 0.833 | **1.000** | 0.833 | **0.833** | **0.671** | **0.83** / 0.83 | 1,787 | 2,342 |
+| v3 | 0.604 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.137 | 0.50 / 0.83 | 1,600 | 2,126 |
+| v4 | 0.771 | 0.896 | 0.833 | **1.000** | 0.833 | **0.833** | **0.671** | **0.83** / 0.83 | 1,787 | 2,342 |
 | **v5** | **0.792** | **0.917** | **0.854** | 0.952 | 0.833 | **0.833** | 0.551 | **0.83** / 0.83 | 1,888 | 2,444 |
 | oracle | 0.833 | 1.000 | 0.917 | 1.000 | 1.000 | 0.667 | 0.594 | 1.00 / 0.83 | 460 | 920 |
 
@@ -173,34 +176,30 @@ Per-type fact recall:
 | | lookup | table | multi-hop | amendment |
 |---|---|---|---|---|
 | v2 | 0.83 | 1.00 | 0.33 | 0.17 |
-| v3 | 0.83 | 1.00 | 0.42 | 0.00 |
-| v4 | 0.83 | 1.00 | 0.42 | **0.58** |
+| v3 | 0.83 | 1.00 | 0.42 | 0.17 |
+| v4 | 0.83 | 1.00 | 0.42 | **0.83** |
 | v5 | 0.83 | 1.00 | **0.50** | **0.83** |
 | oracle | 1.00 | 1.00 | 0.58 | 0.75 |
 
 - **v3's perfect amendment retrieval did not reach the answers on its own.** End-to-end it is
-  no better than v2 (amendment fact recall 0.00 vs 0.17, amendment type 0.167 for both). The
+  no better than v2 (amendment fact recall 0.17 and amendment type 0.167 for both). The
   model found the right provision and refused, because the change lives in the endnote.
-- **v4's endnotes turn it into correct answers.** Amendment fact recall 0.00 → 0.58, amendment
+- **v4's endnotes turn it into correct answers.** Amendment fact recall 0.17 → 0.83, amendment
   type 0.167 → 0.833, prior-text F1 0.14 → 0.67, amendment citation precision and recall 0.33 →
   1.00. False refusals of answerable questions fall from 5 (v3) to 1, so refusal precision rises
   0.50 → 0.83. This is the largest single end-to-end step on the ladder: overall fact recall
-  +0.15 for +216 LLM tokens per question.
+  +0.17 for +216 LLM tokens per question.
 - **v4 scores above the oracle on amendment type (0.833 vs 0.667) — this is one question of noise,
   and the metric is a keyword check.** On 085c86df the oracle wrote "amended" where the gold is
   "inserted"; on 1de9b7c7 v4 did the same. `amendment_type` only looks for the change-type stem,
-  so it cannot see direction: for s99(2) v4 correctly says "(a)(i)" was replaced by "(a)(ii)",
-  while the oracle states the change backwards, and the metric does not distinguish them.
+  so it cannot see direction: the oracle states s99(2)'s substitution backwards and still scores
+  1. Phase 11 adds `amendment_direction` for exactly this.
 - **v5's cross-reference expansion shows up end-to-end as predicted, at dev_mini resolution.**
   Multi-hop fact recall 0.42 → 0.50 and citation recall 0.50 → 0.58 — one question
   (multi_hop-f6e5a319: recall@5 0.5 → 1.0, fact recall 0.5 → 1.0, and it was v4's only false
   refusal). Its one new false refusal is lookup-2f3d865e ("transfer"), whose gold is in neither
   version's top 5; v4 answered it wrongly from s174(7)(a), so v5 refusing is the better behaviour
   even though both score 0. Cost +102 LLM tokens per question.
-- **Generation noise is visible even with identical relevant evidence.** v5's amendment fact
-  recall (0.83) beats v4's (0.58) on two questions whose amendment evidence did not change; only
-  the expansion passages around it did. Same model, temperature 0, slightly different context,
-  different wording. This is the size of effect dev_mini cannot resolve.
 - **Table questions do not regress.** Before the rescore v4/v5 appeared to lose table exact
   (0.667 → 0.500 → 0.333); that was the `2 %` normalisation bug, not the extra endnote tokens.
   The one remaining v4/v5 table miss is table-a8fea698, where the model wrote "the rate 'in
@@ -332,6 +331,42 @@ that support each, across *all* the evidence; a claim with no support sends the 
 - Cost of the phase: 52,425 gpt-oss-20b tokens (the re-run as a gate replayed every check from
   cache); 0 gpt-oss-120b.
 
+## Phase 11: v8 (explicit before/after wording in the endnotes)
+
+`amendment_type` only checks the change-type word. Reading answers in the frontend's Before / Now
+view showed them stating substitutions **backwards**, so Phase 11 added `amendment_direction`
+(`evals/metrics.py`): for the substitutions whose endnote quotes the replaced words (`Sub. for
+"60%"`; 13 of the 48 amendment questions, 10 in dev), it finds both wordings in the answer and
+reads the connective between them ("from X to Y", "X replaced by Y", "Y substituted for X"). It
+abstains when the answer does not quote both or the connective is unclear.
+
+The cause is the Act's abbreviation: `Sub. for "60%"` means 60% is the **earlier** wording, and
+the model reads it as "substituted with 60%" (v6: section 195(1)(i) went "from 30% to 60%"; the
+Act says 60% → 30%). v8 is v6 with `endnotes: explicit`, which adds the wording on each side to
+the endnote line: `wording before: "60%"; wording now: "30%"` (old words from the endnote, new
+words from the bracket the endnote tags in the provision) and `inserted (not in the Act before):
+"..."` for insertions. Nothing else changes.
+
+| dev substitutions (n = 10) | Direction right (scored) | Amendment type | Fact recall | LLM tok/q |
+|---|---|---|---|---|
+| oracle (gold passages, raw endnotes) | 2 of 6 | 0.90 | 0.90 | 937 |
+| v6 | 0 of 3 | 1.00 | 0.90 | 3,313 |
+| **v8** | **7 of 7** | 1.00 | **0.95** | 3,306 |
+
+- **Every scored v6 answer had the direction backwards, and so did most of the oracle's**: with
+  the gold provisions in hand, the model still reverses 4 of 6. This was an evidence-format
+  problem, not retrieval.
+- **v8 gets all 7 right, and states both wordings more often** (7 answers scorable vs 3), at
+  the same token cost.
+- **On dev_mini v8 equals v6 on every other metric** (fact recall 0.875, citation precision
+  0.958, refusal P/R 1.00/1.00) and moves amendment direction 0.0 → 1.0 (2 scorable questions).
+- **The fact metric was rewarding the wrong answer.** amendment-27f49307's gold facts are
+  "substituted" and "60%": v6's backwards answer contains both, and v8's correct "replace 60%
+  with 30%" lacked the word "substituted", so v8 first scored *below* v6 (0.854 vs 0.875). A gold
+  fact that is only a change type now accepts the `amendment_type` stems; every version was
+  rescored from cache (this moved v3 0.562 → 0.604 and v4 0.708 → 0.771).
+- Cost: ~66K gpt-oss-120b tokens on 2026-10-06 for the substitution runs (v6, v8, oracle) and v8's dev_mini answers.
+
 ### Caveats
 
 - dev_mini has 6 questions per type, so a single question moves a per-type score by 0.17. Treat per-type end-to-end differences under ~0.2 as noise. The 138-question retrieval numbers are the reliable signal.
@@ -340,9 +375,8 @@ that support each, across *all* the evidence; a claim with no support sends the 
 - **v1 versus v0 on retrieval depends on the split.** On the 138-question dev set v1 edges v0 (recall@5 0.472 vs 0.460); on dev_mini the order reverses (0.500 vs 0.562). Both gaps are small, which is the point: cleaning has no real effect either way, and dev_mini is too small to resolve it.
 - Table retrieval scores are inflated: templated table questions reuse the row's own wording.
 - 220 of the 222 golden questions were bulk-accepted after spot checks, not individually verified.
-- **Amendment direction is unmeasured.** Reviewing answers in the frontend's Before / Now view
-  showed v6 stating the s99(2) substitution backwards ("from (1)(a)(ii) to (1)(a)(i)"; it was
-  (a)(i) → (a)(ii)), which `amendment_type` (a keyword check) scores as correct.
+- **`amendment_direction` covers only quoted word substitutions** (13 of 48 amendment questions)
+  and abstains when an answer does not quote both wordings, so its n is small.
 - **v6's scope prompt and the definitions tool's one-provision rule were both revised after
   looking at dev results.** The frozen test split is the check on both.
 - Latency is not comparable across versions: most answers were replayed from cache, and v0's p50 rests on 6 measured calls.

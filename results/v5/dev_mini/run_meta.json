@@ -36,7 +36,7 @@
   "n_completed": 30,
   "retrieval_only": false,
   "answer_model": "openai/gpt-oss-120b",
-  "timestamp": "2026-10-06T15:24:40+00:00",
+  "timestamp": "2026-10-06T17:23:48+00:00",
   "jina_tokens_billed": 0,
   "incomplete": null
 }

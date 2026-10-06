@@ -3,7 +3,7 @@ import type { EvalRow } from '../api'
 import { getEvals } from '../api'
 import { ColumnChart } from './ColumnChart'
 
-const SHIPPED = 'v6'
+const SHIPPED = 'v8'
 const pct = (v: number | undefined) => (v == null ? '—' : v.toFixed(3))
 const int = (v: number | undefined) => (v == null ? '—' : Math.round(v).toLocaleString())
 
