@@ -1,8 +1,8 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-04. **Phases 0-5 are DONE, and the retrieval ladder is built through v5** (v3 hybrid ids, v4 amendment endnotes, v5 cross-reference expansion); dev retrieval recall@5 is 0.923. **End-to-end (Groq) numbers for v3/v4/v5 are still pending** (see Next steps 1). A working chatbot exists (`python -m statnav.chat`). Update this file at the end of every session or phase._
+_Last updated: 2026-10-06. **Phases 0-6 are DONE: the ladder v0-v5 is measured end-to-end.** v5 on dev_mini: fact recall 0.771 (oracle 0.833), citation precision 0.917, amendment type 0.833; dev retrieval recall@5 0.923. All end-to-end numbers were **rescored on 2026-10-06** after a `2 %` (U+202F) normalisation fix. A working chatbot exists (`python -m statnav.chat`). Update this file at the end of every session or phase._
 
-> **Resume here:** see "Next steps" step 1. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding).
+> **Resume here:** see "Next steps" step 1 (Phase 7+). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). The 2026-10-06 results + metric fix are **uncommitted** (ask before committing).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -51,7 +51,9 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - the report marks incomplete runs.
 - **Phase 4, v1 + v2 eval runs — DONE (2026-10-04).** The write-up is in `results/ladder.md`.
   - Retrieval on dev, recall@5 / MRR: v0 0.460 / 0.404; v1 0.472 / 0.391; **v2 0.589 / 0.578**. v2's lookup recall@5 is 0.91 (v0: 0.54). Amendment stays at 0.06 for every version.
-  - End-to-end on dev_mini, all three versions now complete at n = 30 (`results/report_dev_mini.md`):
+  - End-to-end on dev_mini, all three versions now complete at n = 30 (`results/report_dev_mini.md`).
+    **Pre-rescore numbers** (Phase 3/4 tables here); the rescored v1/v2/oracle rows are in the
+    Phase 6 table below and in `results/ladder.md`:
 
     | | Fact recall | Cite prec. | Cite rec. | Grounded num. | Table exact | Amend. type | Refusal P / R | Evidence tok | LLM tok/q |
     |---|---|---|---|---|---|---|---|---|---|
@@ -146,7 +148,28 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
   - RRF-fusing the expansion wrecked ranking (lookup hit@1 0.771 -> 0.457), hence the slot merge.
     keep 3 + 2 scored multi-hop 0.859 but dropped table recall@5 0.958 -> 0.917 (one question),
     so keep 4 + 2 was chosen. ~20 settings were tried on dev, so expect a smaller gain on test.
-  - Not yet run end-to-end (Groq). v3 is at 16/30 and v4 not started, so queue v5 last.
+- **Phase 6, v3/v4/v5 end-to-end on dev_mini — DONE (runs finished 2026-10-05, written up
+  2026-10-06 in `results/ladder.md`).** All n = 30 complete, no `incomplete`.
+
+  | | Fact rec. | Cite prec. | Cite rec. | Grounded | Table exact | Amend. type | Refusal P / R | LLM tok/q |
+  |---|---|---|---|---|---|---|---|---|
+  | v2 | 0.583 | 0.646 | 0.583 | 0.683 | 1.000 | 0.167 | 0.42 / 0.83 | 2,155 |
+  | v3 | 0.604 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.50 / 0.83 | 2,123 |
+  | v4 | 0.750 | 0.896 | 0.833 | 1.000 | 0.833 | 0.833 | 0.83 / 0.83 | 2,335 |
+  | v5 | **0.771** | **0.917** | **0.854** | 0.952 | 0.833 | 0.833 | 0.83 / 0.83 | 2,454 |
+  | oracle | 0.833 | 1.000 | 0.917 | 1.000 | 1.000 | 0.667 | 1.00 / 0.83 | 920 |
+
+  - **Answer to the open question: yes.** v3 alone was ~v2 end-to-end (amendment fact recall 0.17);
+    v4's endnotes take amendment fact recall to 0.75 (= oracle), amendment type 0.167 → 0.833,
+    false refusals 5 → 1. Biggest end-to-end step on the ladder (+0.15 fact recall, +212 tok/q).
+  - v5: multi-hop fact recall 0.42 → 0.50 (one question, f6e5a319). Remaining gap to the oracle is
+    lookup (0.83 vs 1.00) and multi-hop (0.50 vs 0.58).
+  - **Metric fix (2026-10-06):** `evals/common.py:norm` now maps `2 %` / `2 %` to `2%`. The
+    model writes percentages with U+202F, so correct table answers scored 0 (v5 table exact
+    looked like 0.333; it is 0.833) and their numbers counted as ungrounded. All 7 dev_mini rows
+    were rescored from cache (answers/retrieval/citations byte-identical, 0 Groq tokens); v1-v5 and
+    the oracle moved, v0 did not. Tests added in `tests/test_eval_metrics.py` (86 offline pass).
+  - The last v4/v5 table miss (a8fea698) is wording: "the rate 'in force'" vs gold "Rates in force".
 - Earlier Phase 3 notes:
   - **222 candidates** in `evals/data/candidates.jsonl`: lookup 54 (32 templated definitions + 22 LLM-drafted numeric), table 45, amendment 48, multi-hop 45 (LLM-drafted from cross-reference pairs), refusal 30. Drafting used ~40K gpt-oss-20b tokens.
   - **All 222 accepted into `evals/data/golden.jsonl`.** The user reviewed 2 individually and then explicitly instructed bulk acceptance of the other 220 (2026-10-02). These are logged as `bulk-accept (user instruction)` in `verification_log.csv`. They were not individually edited, so the README must say the questions were spot-checked, not individually verified.
@@ -220,28 +243,22 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
-1. **Run the end-to-end evals for v3, v4 and v5 on dev_mini (deferred by the user on
-   2026-10-04; do it after ~06:00 UTC, when Groq's rolling 24-hour window has freed up).**
-   State when stopped: v3 19/30 (partial, flagged incomplete), v4 and v5 not started. v4 and v5
-   have only been checked structurally (v4's endnote reaches the rank-1 passage for s99(2)).
-   ```
-   VERSIONS="v3 v4 v5" bash scripts/e2e_queue.sh        # resumes from cache; ~170K tokens total
-   .venv/Scripts/python.exe -m evals.report --split dev_mini
-   ```
-   Then fill the v3/v4/v5 rows into the end-to-end table in `results/ladder.md`. **The question
-   to answer: does v4's endnote attachment turn v3's perfect amendment retrieval into correct
-   amendment answers (amendment type was 0.167 for v2, 0.667 for the oracle)?** Also watch table
-   questions, which gain +648 evidence tokens from v4 and probably do not need them. Only trust
-   a row whose `run_meta.json` has `n_completed == n_questions` and no `incomplete` field.
-2. **Phases 7–11 per the plan** (the retrieval ladder through v5 is built; v4 endnotes and v5
+0. **Ask the user whether to commit** the 2026-10-06 work: the v3/v4/v5 dev_mini results, the
+   rescored v0-v2/oracle results, the `norm()` fix + tests, `results/ladder.md`, and the report.
+1. **Phases 7–11 per the plan** (the retrieval ladder through v5 is built; v4 endnotes and v5
    cross-reference expansion are done): LangGraph agent with table/amendment routing and a
    citation verifier, MCP + FastAPI, Vite frontend, CI + README. The chat already works
    (`python -m statnav.chat`, default v5), so a web UI over `statnav.answer.Answerer` can start
    without waiting on the agent.
-3. Consider a prompt step that makes table answers report **every** field of a cited row: the
+2. Consider a prompt step that makes table answers report **every** field of a cited row: the
    model retrieves the right row and faithfully reports the rate but drops the threshold
-   (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`). Keep it as its own ladder version so it is not
-   confounded with a retrieval change.
+   (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`, seen in the chat). Lower priority now: after the
+   rescore, table fact recall is 1.00 on dev_mini from v2 on. Keep it as its own ladder version so
+   it is not confounded with a retrieval change. The same step could ask the model to quote
+   table cells verbatim ("Rates in force").
+3. Before reporting on **test**, run v5 (and oracle) end-to-end on more than dev_mini's 30
+   questions; per-type differences on dev_mini are one question (0.17) each. A full dev run is
+   ~138 × 2.4K ≈ 330K tokens, i.e. two Groq days.
 4. Optional: FTS (`retrievers: [dense, fts, ids, under]`) lifted multi-hop on dev but cost
    lookup; revisit only if multi-hop is still weak after the end-to-end numbers.
 5. Optional: reword the templated table questions in **dev** that copy row text, since they
@@ -260,6 +277,12 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - **Amendment questions name a provision number;** dense retrieval can't match on numbers (expected; v3 fixes this).
 - **Table answers drop fields they already retrieved.** The model returns the right row but omits a second column (e.g. the Rs. 20,000 threshold on `s393:tbl1#1(i)`). This is a generation gap, not retrieval — a prompt change is the fix, and it should be a *separate* ladder step so it isn't confounded with v3's retrieval changes.
 - **The per-minute rate limiter is in-process only.** The daily ledger is shared in `.cache/llm.sqlite`, but the 8K tokens/min window lives in each `ChatClient`. So running the chat right after an eval run triggers real provider 429s (`QuotaExhausted: provider says retry after ...`, seen up to ~1000s) even with the daily cap nowhere near. Leave a few minutes between an eval run and interactive use, or persist the window.
+- **`amendment_type` is a keyword check** (does the answer contain the change-type stem). It
+  can't see direction: on s99(2) the oracle states the substitution backwards and v4 states it
+  correctly, and neither difference is scored. v4/v5's 0.833 against the oracle's 0.667 is one
+  question of noise ("amended" vs gold "inserted").
+- **Strict fact matching still uses substring containment,** so a gold `2%` would also match
+  inside `12%`. This has not been seen in outputs; worth a word-boundary check if the metric changes again.
 - **Citation parsing is case-sensitive:** a lowercase `"c1"` from the model is silently dropped. Pinned by `tests/test_answer.py::test_parse_citations_is_case_sensitive_today`, because widening it would move the committed citation scores. Revisit when a version changes the prompt.
 - **Groq throttling is almost certainly a rolling 24-hour token window, not a per-minute limit
   (hypothesis, 2026-10-04; the 429 body was not captured).** Evidence: a direct request was

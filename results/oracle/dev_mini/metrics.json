@@ -1,15 +1,15 @@
 {
   "n": 30,
-  "all_facts": 0.6667,
-  "all_facts_exact": 0.5417,
+  "all_facts": 0.75,
+  "all_facts_exact": 0.625,
   "amendment_type": 0.6667,
   "citation_precision": 1.0,
   "citation_recall": 0.9167,
-  "fact_recall": 0.7778,
-  "fact_recall_exact": 0.6319,
-  "grounded_numbers": 0.925,
+  "fact_recall": 0.8333,
+  "fact_recall_exact": 0.6875,
+  "grounded_numbers": 1.0,
   "prior_text_f1": 0.5939,
-  "table_exact": 0.6667,
+  "table_exact": 1.0,
   "refusal_precision": 1.0,
   "refusal_recall": 0.8333,
   "by_type": {
@@ -50,14 +50,14 @@
     },
     "table": {
       "n": 6,
-      "all_facts": 0.6667,
-      "all_facts_exact": 0.6667,
+      "all_facts": 1.0,
+      "all_facts_exact": 1.0,
       "citation_precision": 1.0,
       "citation_recall": 1.0,
-      "fact_recall": 0.7778,
-      "fact_recall_exact": 0.7778,
-      "grounded_numbers": 0.7,
-      "table_exact": 0.6667
+      "fact_recall": 1.0,
+      "fact_recall_exact": 1.0,
+      "grounded_numbers": 1.0,
+      "table_exact": 1.0
     }
   },
   "latency_p50_s": 0.92,

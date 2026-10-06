@@ -70,6 +70,7 @@ def norm(text: str) -> str:
     t = re.sub(r"[—–‑-]", " ", t)
     t = re.sub(r"[^\w%.,/()\s]", " ", t)
     t = re.sub(r"(?<=\d),(?=\d)", "", t)  # 20,000 == 20000; 5,00,000 == 500000
+    t = re.sub(r"(?<=\d)\s+%", "%", t)  # "2 %" (often U+202F from the model) == "2%"
     return re.sub(r"\s+", " ", t).strip(" .,;")
 
 

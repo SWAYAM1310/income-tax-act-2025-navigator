@@ -11,6 +11,8 @@ from evals.metrics import aggregate, fact_match, token_f1
     ("rate is 2 per cent... 2%", "2%"),
     ("a person appointed to be a Deputy Commissioner", "a person appointed to be a Deputy"),
     ("Rates in force apply", "rates in force"),
+    ("the rate is 2 % for education", "2%"),
+    ("TDS at 1 % of the consideration", "1%"),
 ])
 def test_fact_matching_tolerates_formatting(answer, fact):
     assert contains(answer, fact)
@@ -34,6 +36,7 @@ def test_soft_fact_match_accepts_paraphrase(answer, fact):
 @pytest.mark.parametrize("answer,fact", [
     ("the period may be extended by a further forty days", "a further period of thirty days"),
     ("the rate is 20%", "rate of 2%"),
+    ("the rate is 20 %", "rate of 2%"),
     ("the deduction is allowed in the year of purchase", "in the tax year the asset was sold"),
 ])
 def test_soft_fact_match_rejects_wrong_content(answer, fact):
