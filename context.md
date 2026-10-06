@@ -2,7 +2,7 @@
 
 _Last updated: 2026-10-06. **Phases 0-10 DONE; Phase 11 IN PROGRESS.** Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Final test-split runs are queued (`scripts/final_runs.sh`). Update this file at the end of every session or phase._
 
-> **Resume here:** see "Next steps" step 1 (Phase 11 is mid-way: final test runs queued). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). Phase 6 is committed (8a1cc24); Phases 7-10 are committed and pushed (56dfec8); **the Phase 11 work so far is uncommitted** (ask before committing).
+> **Resume here:** see "Next steps" step 1 (Phase 11 is mid-way: final test runs queued). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). Phase 6 is committed (8a1cc24); Phases 7-10 are committed and pushed (56dfec8); Phase 11 part 1 is pushed (184f361) except `.github/workflows/ci.yml` (needs the `workflow` token scope).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -254,14 +254,18 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     `results/<v>/<split>_<filter>/`); `--final` now verifies `test.ids` against `test.sha256`.
   - **CI:** `.github/workflows/ci.yml` (keyless): python job (uv sync --locked, ruff, pytest -m
     "not jina and not db") + frontend job (npm ci, oxlint, build, Playwright). Verified locally in
-    a fresh clone (112 pass, 14 skip for the missing PDF). Not yet run on GitHub (needs a push).
+    a fresh clone (112 pass, 14 skip for the missing PDF). **Not pushed yet:** GitHub rejected
+    the push because the `gh` token lacks the `workflow` scope; the file is kept locally
+    (untracked). The user must run `gh auth refresh -h github.com -s workflow` (browser sign-in),
+    then commit + push `.github/workflows/ci.yml`.
   - **Docker:** `Dockerfile` (API), `frontend/Dockerfile` + `nginx.conf` (static UI, `/api`
     proxy with SSE unbuffered), `docker-compose.yml` now db + api (:8000) + web (:8080). Tested:
     `docker compose up -d --wait` → health, provisions and a full SSE answer through nginx.
   - **DB dump/restore:** `scripts/db_dump.sh` / `db_restore.sh` (pg_dump custom format, 19 MB);
     verified a restore into an empty pgvector container (8,108 provisions, 4,606 chunks, HNSW
-    index). Not published anywhere yet: publishing it (e.g. as a GitHub release asset) is the
-    user's call.
+    index). **Published (user decision, 2026-10-06)** as GitHub release `index-2026-10-06`:
+    `statnav-index-2026-10-06.dump`, sha256 `0fb9aeb6f0361939236d1b8c84a842fbbb9e830893bee06a85f754e4d6246eeb`
+    (public download verified). README's quick start restores from it.
   - **README.md rewritten** (results table v0-v8 + oracle, what the ladder shows, caveats,
     architecture, run instructions, repo map). The test-split section is *pending*.
   - **Test split so far (retrieval-only, 0 tokens):** recall@5 / MRR: v0 0.493/0.403, v1
@@ -387,8 +391,8 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
      n_questions, no `incomplete`), then `python -m evals.report --split test` and fill the
      "Final numbers on the frozen test split" section of README.md and a Phase 11 test table in
      `results/ladder.md`;
-   - ask the user to commit/push (that also runs CI on GitHub for the first time) and whether
-     to publish the DB dump (release asset) so a fresh clone can run without the PDF + Jina;
+   - once the user has granted the `workflow` scope, commit + push `.github/workflows/ci.yml` and
+     check the first GitHub Actions run;
    - optionally a CI retrieval eval once a dump is published (the plan's "retrieval-only eval on
      30 dev questions" needs the dump + committed query-embedding cache).
 3. Consider a prompt step that makes table answers report **every** field of a cited row: the

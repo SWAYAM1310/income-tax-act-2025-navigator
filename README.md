@@ -115,10 +115,12 @@ python -m uv sync
 docker compose up -d db
 ```
 
-The database needs the index. Either **restore a dump** made with `scripts/db_dump.sh`:
+The database needs the index. Either **restore the published dump** (19 MB; parsed Act +
+embeddings, see the [release notes](https://github.com/SWAYAM1310/income-tax-act-2025-navigator/releases/tag/index-2026-10-06)):
 
 ```bash
-bash scripts/db_restore.sh statnav.dump
+curl -LO https://github.com/SWAYAM1310/income-tax-act-2025-navigator/releases/download/index-2026-10-06/statnav-index-2026-10-06.dump
+bash scripts/db_restore.sh statnav-index-2026-10-06.dump
 ```
 
 or **build it** from the official PDF (place `Income-tax-Act-2025.pdf` in the repo root; its
