@@ -91,6 +91,14 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
     if not retrieval_only:
         from statnav.llm.client import ChatClient
         llm = ChatClient.for_role("answer")
+    agent = None
+    if cfg.get("agent"):
+        from statnav.agent.graph import Agent
+        from statnav.llm.client import ChatClient
+        # the scope check runs in retrieval-only mode too: it decides what gets retrieved
+        classify = ChatClient.for_role("classify") if cfg["agent"].get("scope_check") else None
+        checker = ChatClient.for_role("verify") if cfg["agent"].get("verify") else None
+        agent = Agent(conn, jina, cfg, llm, classify, checker)
 
     prev_path = RESULTS_DIR / version / split / "outputs.jsonl"
     prev_latency = ({r["id"]: r.get("latency_s") for r in read_jsonl(prev_path)}
@@ -105,6 +113,18 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
             # refusals in oracle mode still see realistic (v2) passages as distractors
             found = knn(conn, jina.embed_query(q["question"]), "v2", distractor_k)
             hits = as_dicts(found)
+        elif agent is not None:
+            from statnav.llm.client import QuotaExhausted
+            try:
+                res = agent.run(q["question"], generate=llm is not None)
+            except QuotaExhausted as exc:
+                incomplete = str(exc)
+                log.warning("quota_exhausted", at=n, of=len(questions), detail=str(exc))
+                break
+            hits = res.hits
+            rec.update(route=res.route, in_scope=res.in_scope, scope_reason=res.scope_reason,
+                       classify_tokens=res.classify_tokens, definitions=res.definitions)
+            rec["metrics"]["scope_refused"] = float(not res.in_scope)
         else:
             hits = as_dicts(retrieve(conn, jina, q["question"], cfg))
         rec["retrieved"] = [{k: h[k] for k in ("chunk_id", "provisions") if k in h}
@@ -113,7 +133,25 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
             rec["metrics"].update(retrieval_metrics(q, [h["provisions"] for h in hits]))
         rec["jina_tokens"] = jina.usage.tokens - jina_before
 
-        if llm is not None:
+        if llm is not None and agent is not None:
+            evidence = res.evidence
+            rec["evidence_tokens"] = sum(h["tokens"] for h in evidence)
+            reply = res.reply
+            out = res.out
+            if reply is not None:
+                rec["latency_s"] = (prev_latency.get(q["id"]) if reply.cached
+                                    else round(reply.latency_s, 2))
+            # total LLM cost: the 120b answer(s) plus the 20b scope check and checker
+            rec["llm_tokens"] = res.answer_tokens + res.classify_tokens + res.verify_tokens
+            if res.verified is not None or res.attempts > 1:
+                rec.update(verified=res.verified, attempts=res.attempts,
+                           unsupported=res.unsupported, verify_tokens=res.verify_tokens)
+            cited = parse_citations(out, evidence)
+            rec["answer"] = out.get("answer")
+            rec["refused"] = bool(out.get("refused"))
+            rec["cited"] = [h["chunk_id"] for h in cited]
+            rec["metrics"].update(generation_metrics(q, out, cited))
+        elif llm is not None:
             evidence = pack(hits, budget)
             rec["evidence_tokens"] = sum(h["tokens"] for h in evidence)
             from statnav.llm.client import LLMError, QuotaExhausted

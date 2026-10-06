@@ -20,6 +20,10 @@ dependencies = [
     "tiktoken>=0.8",
     "numpy>=1.26",
     "matplotlib>=3.9",
+    "langgraph>=1.2.14",
+    "fastapi>=0.142.2",
+    "uvicorn[standard]>=0.54.0",
+    "mcp>=2.3.0",
 ]
 
 [dependency-groups]

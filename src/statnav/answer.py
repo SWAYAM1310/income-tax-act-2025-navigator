@@ -12,8 +12,13 @@ the evidence packing here; eval-only concerns (oracle context, gold metrics) sta
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from statnav.config import CONFIG_DIR, load_yaml
+
+if TYPE_CHECKING:
+    from statnav.agent.graph import AgentResult
+    from statnav.llm.client import ChatClient, Reply
 
 SYSTEM_PROMPT = """You answer questions about India's Income-tax Act, 2025 (as amended by the \
 Finance Act, 2026).
@@ -40,12 +45,24 @@ def pack(hits: list[dict], budget: int) -> list[dict]:
     return out
 
 
-def user_prompt(question: str, evidence: list[dict]) -> str:
+def passages(evidence: list[dict]) -> str:
+    """The numbered "[C1] ..." blocks, exactly as the generator (and the v7 checker) sees them."""
     blocks = []
     for n, h in enumerate(evidence, 1):
         pages = f" (pp. {h['page_start']}-{h['page_end']})" if h.get("page_start") else ""
         blocks.append(f"[C{n}]{pages}\n{h['text']}")
-    return f"Question: {question}\n\nContext passages:\n\n" + "\n\n".join(blocks)
+    return "\n\n".join(blocks)
+
+
+def user_prompt(question: str, evidence: list[dict]) -> str:
+    return f"Question: {question}\n\nContext passages:\n\n" + passages(evidence)
+
+
+RETRY_PROMPT = """A reviewer checked your answer against the passages and found statements \
+that no passage supports:
+{unsupported}
+Answer again. State only what the passages say, and cite every passage you rely on. Return \
+only JSON in the same format."""
 
 
 def parse_citations(out: dict, evidence: list[dict]) -> list[dict]:
@@ -56,6 +73,32 @@ def parse_citations(out: dict, evidence: list[dict]) -> list[dict]:
         if k.isdigit() and 1 <= int(k) <= len(evidence):
             cited.append(evidence[int(k) - 1])
     return cited
+
+
+def generate(llm: ChatClient, question: str, evidence: list[dict],
+             retry: tuple[str, list[str]] | None = None) -> tuple[dict, Reply]:
+    """One answer call: the parsed {"answer", "citations", "refused"} and the raw reply.
+
+    `retry` = (the previous reply's text, the claims the v7 checker found unsupported) makes it
+    a second turn of the same conversation. Raises `QuotaExhausted` / `LLMError` from the
+    client; callers decide how to surface them. A reply that is not valid JSON is kept as a
+    plain, uncited answer.
+    """
+    from statnav.llm.client import LLMError
+
+    messages = [{"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt(question, evidence)}]
+    if retry:
+        previous, unsupported = retry
+        messages += [{"role": "assistant", "content": previous},
+                     {"role": "user", "content": RETRY_PROMPT.format(
+                         unsupported="\n".join(f"- {c}" for c in unsupported))}]
+    reply = llm.chat(messages, json_mode=True)
+    try:
+        out = reply.json()
+    except (LLMError, ValueError):
+        out = {"answer": reply.text, "citations": [], "refused": False}
+    return out, reply
 
 
 @dataclass
@@ -70,6 +113,10 @@ class Answer:
     latency_s: float = 0.0
     cached: bool = False
     error: str | None = None
+    route: str | None = None  # agent versions only: amendment | definition | table | general
+    classify_tokens: int = 0  # agent versions only: gpt-oss-20b scope-check tokens
+    verified: bool | None = None  # v7: every claim supported (None: not checked)
+    unsupported: list[str] = field(default_factory=list)  # v7: claims no passage supports
 
     @property
     def provisions(self) -> list[str]:
@@ -97,8 +144,16 @@ class Answerer:
         self.k = self.cfg["retrieval"]["k"]
         self.budget = self.cfg["evidence_budget"]
         self.jina = JinaClient.from_config()
-        self.conn = connect()
+        self.conn = connect(autocommit=True)  # read-only and long-lived; see db.connect
         self.llm = ChatClient.for_role("answer")
+        self.agent = None
+        if self.cfg.get("agent"):
+            from statnav.agent.graph import Agent
+
+            classify = (ChatClient.for_role("classify")
+                        if self.cfg["agent"].get("scope_check") else None)
+            checker = ChatClient.for_role("verify") if self.cfg["agent"].get("verify") else None
+            self.agent = Agent(self.conn, self.jina, self.cfg, self.llm, classify, checker)
 
     @classmethod
     def for_version(cls, version: str = "v2") -> Answerer:
@@ -121,6 +176,8 @@ class Answerer:
     def ask(self, question: str, k: int | None = None) -> Answer:
         from statnav.llm.client import LLMError, QuotaExhausted
 
+        if self.agent is not None:
+            return self._ask_agent(question, k)
         evidence = pack(self.retrieve(question, k), self.budget)
         res = Answer(question=question, answer="", refused=False, evidence=evidence,
                      evidence_tokens=sum(h["tokens"] for h in evidence))
@@ -129,23 +186,53 @@ class Answerer:
             res.refused = True
             return res
         try:
-            reply = self.llm.chat(
-                [{"role": "system", "content": SYSTEM_PROMPT},
-                 {"role": "user", "content": user_prompt(question, evidence)}],
-                json_mode=True,
-            )
+            out, reply = generate(self.llm, question, evidence)
         except (QuotaExhausted, LLMError) as exc:
             res.error = str(exc)
             res.answer = f"[{type(exc).__name__}: {exc}]"
             return res
-        res.cached = reply.cached
-        res.latency_s = round(reply.latency_s, 2)
-        res.llm_tokens = reply.usage.get("total_tokens") or 0
+        return _fill(res, out, reply)
+
+    def _ask_agent(self, question: str, k: int | None) -> Answer:
+        from statnav.llm.client import LLMError, QuotaExhausted
+
         try:
-            out = reply.json()
-        except (LLMError, ValueError):
-            out = {"answer": reply.text, "citations": [], "refused": False}
-        res.answer = out.get("answer") or ""
-        res.refused = bool(out.get("refused"))
-        res.cited = parse_citations(out, evidence)
+            r = self.agent.run(question, k)
+        except (QuotaExhausted, LLMError) as exc:
+            return failed(question, exc)
+        return from_agent(r)
+
+
+def failed(question: str, exc: Exception) -> Answer:
+    """A provider failure, shaped so it can never be read as an answer."""
+    return Answer(question=question, answer=f"[{type(exc).__name__}: {exc}]", refused=False,
+                  error=str(exc))
+
+
+def from_agent(r: AgentResult) -> Answer:
+    """An agent run's result as an `Answer` (the chat, the API and the MCP server use this)."""
+    res = Answer(question=r.question, answer="", refused=False, route=r.route,
+                 classify_tokens=r.classify_tokens, evidence=r.evidence,
+                 evidence_tokens=sum(h["tokens"] for h in r.evidence))
+    if r.error:
+        res.error = r.error
+        res.answer = r.out["answer"]
         return res
+    if r.reply is None:  # refused before generation
+        res.answer = r.out["answer"]
+        res.refused = bool(r.out["refused"])
+        return res
+    res = _fill(res, r.out, r.reply)
+    res.llm_tokens = r.answer_tokens + r.verify_tokens  # incl. a v7 retry and its checker
+    res.verified, res.unsupported = r.verified, r.unsupported
+    return res
+
+
+def _fill(res: Answer, out: dict, reply: Reply) -> Answer:
+    res.cached = reply.cached
+    res.latency_s = round(reply.latency_s, 2)
+    res.llm_tokens = reply.usage.get("total_tokens") or 0
+    res.answer = out.get("answer") or ""
+    res.refused = bool(out.get("refused"))
+    res.cited = parse_citations(out, res.evidence)
+    return res

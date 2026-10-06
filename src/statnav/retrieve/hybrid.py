@@ -68,6 +68,23 @@ _COLS = ("SELECT id, provision_id, 0.0 AS score, embed_text, tokens, page_start,
          "meta FROM chunks ")
 
 
+def _exact(where: str) -> str:
+    """SQL ranking the chunks matching `where` by exact cosine distance (params: ..., qvec, k).
+
+    A plain `WHERE <filter> ORDER BY embedding <=> q LIMIT k` is planned as an HNSW index scan
+    with the filter applied afterwards, and the scan only visits ~`hnsw.ef_search` nearest
+    neighbours. A small candidate set (one provision's subtree, one hop of cross-references)
+    is usually *not* among them, so valid matches were silently dropped: for "What is the
+    meaning of "India"?" the subtree of s2(52) returned nothing at ef_search 40 or 100. The
+    MATERIALIZED CTE stops the planner pushing the ORDER BY into the index; the candidate sets
+    are small, so exact ordering is cheap.
+    """
+    return ("WITH cand AS MATERIALIZED (SELECT id, provision_id, embed_text, tokens, "
+            "page_start, page_end, meta, embedding FROM chunks WHERE " + where + ") "
+            "SELECT id, provision_id, 0.0 AS score, embed_text, tokens, page_start, page_end, "
+            "meta FROM cand ORDER BY embedding <=> %s, id LIMIT %s")
+
+
 #: An exact match this small is a heading stub -- "393. [Payments to residents]" with all the
 #: content in child chunks. It is poor evidence on its own, and the exact-match boost put it
 #: above the table rows that answer the question (table hit@1 0.833 -> 0.000). Stubs are only
@@ -140,13 +157,12 @@ def under_ids(conn: psycopg.Connection, ids: list[str], version: str, qvec: np.n
     if not ids:
         return []
     rows = conn.execute(
-        _COLS + "WHERE version = %s AND EXISTS ("
-        "  SELECT 1 FROM jsonb_array_elements_text(meta->'provisions') p,"
-        "       unnest(%s::text[]) AS ref"
-        # a descendant is the reference followed by a bracket or a path separator, so `s39`
-        # cannot match `s393`
-        "  WHERE p = ref OR p LIKE ref || '(%%' OR p LIKE ref || ':%%'"
-        ") ORDER BY embedding <=> %s LIMIT %s",
+        _exact("version = %s AND EXISTS ("
+               "  SELECT 1 FROM jsonb_array_elements_text(meta->'provisions') p,"
+               "       unnest(%s::text[]) AS ref"
+               # a descendant is the reference followed by a bracket or a path separator, so
+               # `s39` cannot match `s393`
+               "  WHERE p = ref OR p LIKE ref || '(%%' OR p LIKE ref || ':%%')"),
         (version, ids, qvec, k),
     ).fetchall()
     return [Hit(*r) for r in rows]
@@ -177,8 +193,7 @@ def xref_hits(conn: psycopg.Connection, seeds: list[Hit], version: str, qvec: np
     if not neighbours:
         return []
     rows = conn.execute(
-        _COLS + "WHERE version = %s AND meta->'provisions' ?| %s AND NOT (id = ANY(%s)) "
-        "ORDER BY embedding <=> %s LIMIT %s",
+        _exact("version = %s AND meta->'provisions' ?| %s AND NOT (id = ANY(%s))"),
         (version, neighbours, skip, qvec, k),
     ).fetchall()
     return [Hit(*r) for r in rows]

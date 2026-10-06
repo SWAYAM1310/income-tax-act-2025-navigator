@@ -1,0 +1,15 @@
+event: step
+data: {"node": "classify", "route": "general", "in_scope": false, "reason": "Question about refund process on e‑filing portal is a taxpayer case.", "terms": []}
+
+event: step
+data: {"node": "refuse"}
+
+event: evidence
+data: []
+
+event: answer
+data: {"question": "How do I claim a refund that is stuck on the portal?", "version": "v6", "answer": "Refused: Question about refund process on e‑filing portal is a taxpayer case.", "refused": true, "error": null, "route": "general", "verified": null, "unsupported": [], "citations": [], "evidence_tokens": 0, "llm_tokens": 0, "classify_tokens": 411, "cached": false, "latency_s": 0.0}
+
+event: done
+data: {}
+

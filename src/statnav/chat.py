@@ -23,7 +23,7 @@ from statnav.answer import Answer, Answerer
 from statnav.obs.logging import configure
 
 WRAP = 96
-VERSIONS = {"v0", "v1", "v2", "v3", "v4", "v5"}
+VERSIONS = {"v0", "v1", "v2", "v3", "v4", "v5", "v6"}
 
 
 def _fmt(res: Answer, show_evidence: bool) -> str:
@@ -50,6 +50,8 @@ def _fmt(res: Answer, show_evidence: bool) -> str:
             out.append(f" {used}[C{n}] {h['chunk_id']}  {h['tokens']} tok  "
                        f"score {h.get('score')}")
             out.append(textwrap.indent(textwrap.shorten(h["text"], 220), "      "))
+    if res.route:
+        out.append(f"\n  [agent route: {res.route}; scope check {res.classify_tokens} tokens]")
     cost = "cached (0 new tokens)" if res.cached else f"{res.llm_tokens} LLM tokens"
     out.append(f"\n  [{len(res.evidence)} passages, {res.evidence_tokens} evidence tokens; "
                f"{cost}; {res.latency_s}s]")
@@ -61,7 +63,7 @@ def _fmt(res: Answer, show_evidence: bool) -> str:
 HELP = """commands:
   /evidence        toggle printing the passages sent to the model
   /k <n>           retrieve n passages (default: the version's k)
-  /version <v>     switch ladder version (v0, v1, v2, v3, v4, v5)
+  /version <v>     switch ladder version (v0 ... v6)
   /tokens          Groq tokens spent today
   /quit            exit"""
 
@@ -110,8 +112,8 @@ def repl(bot: Answerer, show_evidence: bool) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description="Ask the Income-tax Act, 2025 a question.")
     ap.add_argument("question", nargs="*", help="omit for an interactive session")
-    ap.add_argument("--version", default="v5",
-                    help="ladder version (default: v5, the best)")
+    ap.add_argument("--version", default="v6",
+                    help="ladder version (default: v6, the best)")
     ap.add_argument("-k", type=int, default=None, help="passages to retrieve")
     ap.add_argument("--evidence", action="store_true", help="print the passages sent")
     ap.add_argument("--verbose", action="store_true", help="show the JSON pipeline logs")

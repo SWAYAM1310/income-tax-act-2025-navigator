@@ -45,10 +45,11 @@ def load() -> dict[str, int]:
         conn.execute(f"TRUNCATE {', '.join(STRUCTURED)}")
         counts["provisions"] = _copy(conn, "provisions", [
             "id", "kind", "number", "label", "heading", "text", "parent_id", "chapter", "part",
-            "schedule", "page_start", "page_end", "is_amended", "ord"], (
+            "schedule", "page_start", "page_end", "is_amended", "ord", "text_marked"], (
             (p["id"], p["kind"], p["number"], p["label"], p["heading"], p["text"], p["parent"],
              p["chapter"], p["part"], p["schedule"], p["page_start"], p["page_end"],
-             p["is_amended"], k) for k, p in enumerate(prov)))
+             p["is_amended"], k, p.get("text_marked") if p["is_amended"] else None)
+            for k, p in enumerate(prov)))
         counts["tables"] = _copy(conn, "tables", [
             "table_id", "title", "headers", "notes", "page_start", "page_end"], (
             (t["table_id"], t["title"] or None, Jsonb(t["headers"]), Jsonb(t["notes"]),

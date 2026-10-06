@@ -154,3 +154,24 @@ def by_id_hit(conn, chunk_id):
     r = conn.execute("SELECT id, provision_id, 0.0, embed_text, tokens, page_start, page_end, "
                      "meta FROM chunks WHERE id=%s", (chunk_id,)).fetchone()
     return Hit(*r)
+
+
+@pytest.mark.db
+def test_under_ids_is_exact_whatever_the_hnsw_search_width():
+    """A filtered `ORDER BY embedding <=> q` used to be planned as an HNSW scan that only
+    visits ~ef_search neighbours, so s2(52) ("India") came back empty at 40 and 100."""
+    import numpy as np
+
+    from statnav.index.db import connect
+    from statnav.retrieve.hybrid import under_ids, xref_hits
+
+    try:
+        conn = connect()
+    except Exception as exc:  # noqa: BLE001 - any connection failure means "skip"
+        pytest.skip(f"database not reachable: {exc}")
+    qvec = np.ones(1024, dtype=np.float32) / 32.0
+    conn.execute("SET hnsw.ef_search = 10")
+    assert [h.chunk_id for h in under_ids(conn, ["s2(52)"], "v2", qvec, 2)] == ["v2:s2(52)"]
+    seed = under_ids(conn, ["s171"], "v2", qvec, 1)
+    assert xref_hits(conn, seed, "v2", qvec, 5)  # s171 has cross-references
+    conn.close()

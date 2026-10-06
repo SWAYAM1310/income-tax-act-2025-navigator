@@ -173,6 +173,14 @@ def aggregate(records: list[dict]) -> dict:
         fn = sum(1 for r in gen if not r["metrics"]["refused"] and r["metrics"]["should_refuse"])
         out["refusal_precision"] = round(tp / (tp + fp), 4) if tp + fp else None
         out["refusal_recall"] = round(tp / (tp + fn), 4) if tp + fn else None
+    # agent versions: the scope check's own refusals, measurable without generation
+    scoped = [r for r in records if "scope_refused" in r.get("metrics", {})]
+    if scoped:
+        tp = sum(1 for r in scoped if r["metrics"]["scope_refused"] and r["type"] == "refusal")
+        fp = sum(1 for r in scoped if r["metrics"]["scope_refused"] and r["type"] != "refusal")
+        n_out = sum(1 for r in scoped if r["type"] == "refusal")
+        out["scope_precision"] = round(tp / (tp + fp), 4) if tp + fp else None
+        out["scope_recall"] = round(tp / n_out, 4) if n_out else None
     by_type: dict = {}
     for t in sorted({r["type"] for r in records}):
         rs = [r for r in records if r["type"] == t]
@@ -185,7 +193,8 @@ def aggregate(records: list[dict]) -> dict:
     lat = [r["latency_s"] for r in records if r.get("latency_s") is not None]
     if lat:
         out["latency_p50_s"], out["latency_p95_s"] = pct(lat, 0.5), pct(lat, 0.95)
-    for k in ("llm_tokens", "jina_tokens", "evidence_tokens"):
+    for k in ("llm_tokens", "classify_tokens", "verify_tokens", "jina_tokens",
+              "evidence_tokens"):
         vals = [r[k] for r in records if r.get(k) is not None]
         if vals:
             out[f"{k}_mean"] = round(statistics.mean(vals), 1)

@@ -10,15 +10,20 @@ Setup for every run:
   often writes percentages as `2 %` with a narrow no-break space (U+202F), which did not match a
   gold `2%`, so correct table answers scored 0 and their numbers counted as ungrounded. Every
   version was rescored from the same cached answers (answers, retrieval and citations
-  byte-identical; 0 LLM tokens). This lifted table exact for v1-v5 and the oracle alike; v0 was
-  unaffected. Pre-fix numbers are in git history.
+  byte-identical; 0 LLM tokens). This lifted table exact for v1-v5 and the oracle alike. A
+  second pass the same day also maps "2 per cent" / "2 percent" (the Act's own wording) to
+  "2%", which lifted v0 too. Pre-fix numbers are in git history.
+- **v3-v5 dev_mini were re-run on 2026-10-06** after a retrieval bug fix (see Phase 7): their
+  subtree and cross-reference lookups were silently dropping candidates. Dev recall, MRR and
+  hit@1 were unchanged, but the evidence changed on 4-5 dev_mini questions per version, so those
+  answers were regenerated.
 
 ## Baselines (Phase 3)
 
 - **v0:** raw page text in 512-token windows, dense retrieval with Jina v5 embeddings.
 - **oracle:** the gold provisions and their amendment endnotes are handed directly to the generator. This is the ceiling for generation with perfect retrieval.
 
-On dev_mini, v0 reaches 0.486 fact recall against the oracle's 0.833.
+On dev_mini, v0 reaches 0.542 fact recall against the oracle's 0.833.
 
 ## Phase 4: v1 (cleaned text) and v2 (structural chunks)
 
@@ -41,13 +46,13 @@ Each cell is recall@5 / MRR.
 
 | | Fact recall | Citation precision | Citation recall | Grounded numbers | Table exact | Amendment type | Refusal precision / recall | Evidence tok | LLM tok/q |
 |---|---|---|---|---|---|---|---|---|---|
-| v0 | 0.486 | 0.583 | 0.542 | 0.583 | 0.500 | 0.000 | 0.38 / 0.83 | 4,106 | 4,613 |
-| v1 | 0.507 | 0.542 | 0.500 | 0.625 | 0.667 | 0.000 | 0.42 / 0.83 | 4,106 | 4,622 |
+| v0 | 0.542 | 0.583 | 0.542 | 0.583 | 0.833 | 0.000 | 0.38 / 0.83 | 4,106 | 4,613 |
+| v1 | 0.521 | 0.542 | 0.500 | 0.625 | 0.833 | 0.000 | 0.42 / 0.83 | 4,106 | 4,622 |
 | v2 | **0.583** | **0.646** | **0.583** | **0.683** | **1.000** | **0.167** | 0.42 / 0.83 | **1,628** | **2,155** |
 | oracle | 0.833 | 1.000 | 0.917 | 1.000 | 1.000 | 0.667 | 1.00 / 0.83 | 460 | 920 |
 
-- **Cleaning (v1) does not pay off end-to-end either.** Against v0 it is mixed and small (fact recall 0.507 vs 0.486 and table exact 0.667 vs 0.500 — one question — but citation precision 0.542 vs 0.583) for the same cost: identical evidence tokens and 4,622 vs 4,613 LLM tokens per question. Stripping headers and footers does not change which 512-token window a provision falls into, so the generator sees the same evidence; the differences are within dev_mini's noise. This mirrors the retrieval result and is the useful negative finding of the phase — the win comes from chunking structurally, not from tidying the text.
-- **v2 is better and cheaper.** Fact recall rises 0.10, citation precision 0.06 and table exact 0.50, while tokens per question fall 53% (4.6K → 2.2K). Smaller, precise chunks leave the model less irrelevant text to cite.
+- **Cleaning (v1) does not pay off end-to-end either.** Against v0 it is flat to slightly worse (fact recall 0.521 vs 0.542, citation precision 0.542 vs 0.583, table exact equal at 0.833) for the same cost: identical evidence tokens and 4,622 vs 4,613 LLM tokens per question. Stripping headers and footers does not change which 512-token window a provision falls into, so the generator sees the same evidence; the differences are within dev_mini's noise. This mirrors the retrieval result and is the useful negative finding of the phase — the win comes from chunking structurally, not from tidying the text.
+- **v2 is better and cheaper.** Fact recall rises 0.04, citation precision 0.06 and table exact 0.17, while tokens per question fall 53% (4.6K → 2.2K). Smaller, precise chunks leave the model less irrelevant text to cite.
 - **The gap to the oracle is mostly retrieval.**
   - Per-type fact recall for v2 against the oracle is: lookup 0.83 vs 1.00, table 1.00 vs 1.00, multi-hop 0.33 vs 0.58, amendment 0.17 vs 0.75.
   - Table is already at the ceiling. Amendment and multi-hop are where the remaining points are.
@@ -158,9 +163,9 @@ were what blocked amendment *answers*, so amendment linking came before cross-re
 | | Fact recall | Citation precision | Citation recall | Grounded numbers | Table exact | Amendment type | Prior-text F1 | Refusal precision / recall | Evidence tok | LLM tok/q |
 |---|---|---|---|---|---|---|---|---|---|---|
 | v2 | 0.583 | 0.646 | 0.583 | 0.683 | 1.000 | 0.167 | 0.116 | 0.42 / 0.83 | 1,628 | 2,155 |
-| v3 | 0.604 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.137 | 0.50 / 0.83 | 1,595 | 2,123 |
-| v4 | 0.750 | 0.896 | 0.833 | **1.000** | 0.833 | **0.833** | 0.549 | **0.83** / 0.83 | 1,788 | 2,335 |
-| **v5** | **0.771** | **0.917** | **0.854** | 0.952 | 0.833 | **0.833** | **0.590** | **0.83** / 0.83 | 1,901 | 2,454 |
+| v3 | 0.562 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.137 | 0.50 / 0.83 | 1,600 | 2,126 |
+| v4 | 0.708 | 0.896 | 0.833 | **1.000** | 0.833 | **0.833** | **0.671** | **0.83** / 0.83 | 1,787 | 2,342 |
+| **v5** | **0.792** | **0.917** | **0.854** | 0.952 | 0.833 | **0.833** | 0.551 | **0.83** / 0.83 | 1,888 | 2,444 |
 | oracle | 0.833 | 1.000 | 0.917 | 1.000 | 1.000 | 0.667 | 0.594 | 1.00 / 0.83 | 460 | 920 |
 
 Per-type fact recall:
@@ -168,19 +173,19 @@ Per-type fact recall:
 | | lookup | table | multi-hop | amendment |
 |---|---|---|---|---|
 | v2 | 0.83 | 1.00 | 0.33 | 0.17 |
-| v3 | 0.83 | 1.00 | 0.42 | 0.17 |
-| v4 | 0.83 | 1.00 | 0.42 | **0.75** |
-| v5 | 0.83 | 1.00 | **0.50** | 0.75 |
+| v3 | 0.83 | 1.00 | 0.42 | 0.00 |
+| v4 | 0.83 | 1.00 | 0.42 | **0.58** |
+| v5 | 0.83 | 1.00 | **0.50** | **0.83** |
 | oracle | 1.00 | 1.00 | 0.58 | 0.75 |
 
 - **v3's perfect amendment retrieval did not reach the answers on its own.** End-to-end it is
-  almost exactly v2 (amendment fact recall 0.17, amendment type 0.167). The model found the right
-  provision and refused, because the change lives in the endnote.
-- **v4's endnotes turn it into correct answers.** Amendment fact recall 0.17 → 0.75 (equal to the
-  oracle), amendment type 0.167 → 0.833, prior-text F1 0.14 → 0.55, amendment citation precision
-  and recall 0.33 → 1.00. False refusals of answerable questions fall from 5 (v3) to 1, so refusal
-  precision rises 0.50 → 0.83. This is the largest single end-to-end step on the ladder: overall
-  fact recall +0.15 for +212 LLM tokens per question.
+  no better than v2 (amendment fact recall 0.00 vs 0.17, amendment type 0.167 for both). The
+  model found the right provision and refused, because the change lives in the endnote.
+- **v4's endnotes turn it into correct answers.** Amendment fact recall 0.00 → 0.58, amendment
+  type 0.167 → 0.833, prior-text F1 0.14 → 0.67, amendment citation precision and recall 0.33 →
+  1.00. False refusals of answerable questions fall from 5 (v3) to 1, so refusal precision rises
+  0.50 → 0.83. This is the largest single end-to-end step on the ladder: overall fact recall
+  +0.15 for +216 LLM tokens per question.
 - **v4 scores above the oracle on amendment type (0.833 vs 0.667) — this is one question of noise,
   and the metric is a keyword check.** On 085c86df the oracle wrote "amended" where the gold is
   "inserted"; on 1de9b7c7 v4 did the same. `amendment_type` only looks for the change-type stem,
@@ -191,7 +196,11 @@ Per-type fact recall:
   (multi_hop-f6e5a319: recall@5 0.5 → 1.0, fact recall 0.5 → 1.0, and it was v4's only false
   refusal). Its one new false refusal is lookup-2f3d865e ("transfer"), whose gold is in neither
   version's top 5; v4 answered it wrongly from s174(7)(a), so v5 refusing is the better behaviour
-  even though both score 0. Cost +119 LLM tokens per question.
+  even though both score 0. Cost +102 LLM tokens per question.
+- **Generation noise is visible even with identical relevant evidence.** v5's amendment fact
+  recall (0.83) beats v4's (0.58) on two questions whose amendment evidence did not change; only
+  the expansion passages around it did. Same model, temperature 0, slightly different context,
+  different wording. This is the size of effect dev_mini cannot resolve.
 - **Table questions do not regress.** Before the rescore v4/v5 appeared to lose table exact
   (0.667 → 0.500 → 0.333); that was the `2 %` normalisation bug, not the extra endnote tokens.
   The one remaining v4/v5 table miss is table-a8fea698, where the model wrote "the rate 'in
@@ -199,9 +208,129 @@ Per-type fact recall:
   1.00 for every version from v2 on.
 - **The remaining gap to the oracle is lookup and multi-hop** (0.83 vs 1.00 and 0.50 vs 0.58);
   amendment and table are at the ceiling on dev_mini. v5's evidence is still 4× the oracle's
-  (1,901 vs 460 tokens).
+  (1,888 vs 460 tokens).
 - Groq spend: the runs finished on 2026-10-05 (ledger: 123,708 gpt-oss-120b tokens that day, on
-  top of v3's partial on 2026-10-04); the rescore replayed every answer from cache at 0 tokens.
+  top of v3's partial on 2026-10-04); the rescores replayed every answer from cache at 0 tokens.
+
+## Phase 7: v6 (LangGraph agent)
+
+v6 wraps v5's retrieval in a LangGraph graph (`statnav/agent/graph.py`):
+
+    classify --(out of scope)--> refuse
+        \--(in scope)--> retrieve (= v5) --> tools --> pack --> generate
+
+Each node targets a failure v5 still had, found by reading its misses:
+
+| v5 failure | Node | What it does |
+|---|---|---|
+| "What is the meaning of "transfer"?" ranks sections that *use* the word, never s2(109) | `tools` (definitions) | 442 defined terms parsed from `"X" means/includes` clauses; the defining clause goes to rank 1 |
+| An `Ins.` endnote reported as "amended"; Schedule XIV 4(3) reported as "substituted" (that endnote was 4(1)(a)'s) | structured endnotes | `[applies to Schedule XIV, paragraph 4(3); amendment type: inserted; by Act No. 4 of 2026; ...]` |
+| "How do I claim a refund that is stuck on the portal?" answered | `classify` (scope) | gpt-oss-20b screens the topic; out-of-scope questions are refused before retrieval |
+
+Routing is deterministic (regexes; every dev amendment and table question routes correctly).
+Only the scope check uses an LLM: gpt-oss-20b, on its own daily quota. The prompt, evidence
+packing and answer model are unchanged, so the differences below come from the graph.
+
+### Retrieval and scope, dev (n = 138)
+
+| | recall@5 | MRR | hit@1 | lookup recall@5 / hit@1 | scope precision / recall |
+|---|---|---|---|---|---|
+| v5 | 0.923 | 0.882 | 0.831 | 0.914 / 0.771 | — |
+| **v6** | **0.940** | **0.913** | **0.871** | **0.971 / 0.914** | **1.00 / 1.00** |
+
+- **Definitions fix the lookup misses.** "transfer" and "India" go from outside the top 10 to
+  rank 1, and three more definition questions move their gold from rank 2-3 to rank 1. Table,
+  amendment and multi-hop are unchanged. Only one defining provision per term: also adding a
+  second one ("University" in both s66(40) and s402(44)) pushed a multi-hop question's other
+  gold out of the top 5.
+- **The scope check catches all 14 out-of-scope dev questions and refuses no answerable one.**
+  That took one prompt revision, so it is tuned on dev. The first prompt let gpt-oss-20b judge
+  from memory whether the Act covers a topic, and it refused 5 of 124 answerable questions
+  ("The Act does not define 'zero coupon bond'" -- s2(112) does). The revision tells it that it
+  has not seen the Act and must judge the topic only. Expect the test split to be less clean.
+- Cost: ~420 gpt-oss-20b tokens per question for the scope check; 0 Jina tokens.
+
+### End-to-end, dev_mini (n = 30)
+
+| | Fact recall | Citation precision | Citation recall | Grounded numbers | Table exact | Amendment type | Refusal precision / recall | Evidence tok | LLM tok/q |
+|---|---|---|---|---|---|---|---|---|---|
+| v5 | 0.792 | 0.917 | 0.854 | 0.952 | 0.833 | 0.833 | 0.83 / 0.83 | 1,888 | 2,444 |
+| **v6** | **0.875** | **0.958** | **0.896** | **1.000** | **1.000** | **1.000** | **1.00 / 1.00** | 1,652 | 2,531 |
+| oracle | 0.833 | 1.000 | 0.917 | 1.000 | 1.000 | 0.667 | 1.00 / 0.83 | 460 | 920 |
+
+Per-type fact recall, v5 → v6: lookup 0.83 → **1.00**, amendment 0.83 → **1.00**, table 1.00 →
+1.00, multi-hop 0.50 → 0.50 (oracle: 1.00 / 0.75 / 1.00 / 0.58).
+
+- **Three questions change, all for the better, each attributable to one node:**
+  lookup-2f3d865e ("transfer") goes from refused to correct (definitions); amendment-1de9b7c7 now
+  says "inserted" (structured endnotes); refusal-270744d1 ("refund stuck on the portal") is
+  refused (scope). No question regresses.
+- **v6 is the first version with no false refusal and no missed refusal on dev_mini.** Even the
+  oracle answers one out-of-scope question from its distractor passages.
+- **It scores above the oracle on fact recall (0.875 vs 0.833).** The oracle is a ceiling for
+  *generation* given gold provisions in the raw endnote format; it has neither the scope check
+  nor structured endnotes, so it answers one refusal question and words two amendments loosely.
+  The remaining gap to the oracle is **multi-hop (0.50 vs 0.58)**.
+- **Cost:** +87 LLM tokens per question overall: ~390 gpt-oss-20b scope tokens on every
+  question, offset by 120b calls skipped on refused questions and by smaller evidence (1,652 vs
+  1,888 tokens, because the definition clause replaces looser passages).
+- Groq spend for this phase (2026-10-06, including the v3-v5 reruns and the first v6 attempt):
+  117,485 gpt-oss-120b and 112,199 gpt-oss-20b tokens.
+
+### The retrieval bug found on the way
+
+`under_ids` and `xref_hits` (v3 onward) ran `WHERE <small filter> ORDER BY embedding <=> q
+LIMIT k`. Postgres planned that as an HNSW index scan with the filter applied afterwards, and the
+scan only visits about `hnsw.ef_search` nearest neighbours, so a candidate set like "the subtree
+of s2(52)" usually came back empty (it did at ef_search 40 and 100; 1000 found it). Results also
+depended on whether an earlier `knn` call had raised `ef_search` on the same connection. The fix
+ranks the filtered set exactly in a `MATERIALIZED` CTE. On dev it changed 15-16 of 138 ranked
+lists, all below the gold hit, so recall, MRR and hit@1 did not move; v3-v5 dev_mini were re-run
+because their evidence changed.
+
+## Phase 8: v7 (verifier) -- a measured negative result
+
+The plan's v7 is a citation verifier. Before building it I checked what it could fix on v6's
+dev_mini answers:
+
+- **Deterministic citation rules flag mostly false positives.** "Every number appears in the
+  cited text" trips on years such as 2026 that come from the endnotes; "every named provision is
+  cited" trips on provisions such as s237(1) that the cited passage itself names. Grounded
+  numbers are already 1.000.
+- **The visible gap was under-citation:** multi-hop answers rely on two passages and cite one
+  (v6 cites `s173` but not `s66(16)`; `s394` but not `s402(33)`), with both passages in the
+  evidence. Citation recall 0.896.
+
+So v7 adds a `verify` node: gpt-oss-20b splits the answer into claims and names the passages
+that support each, across *all* the evidence; a claim with no support sends the answer back to
+`generate` once, with the claim named (`statnav/agent/verify.py`).
+
+| dev_mini | Fact recall | Citation precision | Citation recall | Grounded numbers | LLM tok/q |
+|---|---|---|---|---|---|
+| v6 | 0.875 | 0.958 | 0.896 | 1.000 | 2,531 |
+| v7, citations re-derived from the checker | 0.875 | 0.896 | 0.854 | 0.952 | 4,625 |
+| **v7, checker as a gate (shipped)** | 0.875 | 0.958 | 0.896 | 1.000 | 4,625 |
+
+- **The checker judged every one of the 24 answers supported, on the first attempt.** No
+  retries, no changed answers.
+- **The under-citation hypothesis was wrong.** For "fixed place of business", s173 alone does
+  say "a fixed place of business through which the business ... is wholly or partly carried
+  on"; the gold's second hop, s66(16), is needed to *find* that passage, not to support the
+  answer's wording. The multi-hop gold labels both hops, so "citation recall" there partly
+  measures a labelling convention.
+- **Replacing the generator's citations with the checker's support made them worse**
+  (precision 0.958 → 0.896, recall 0.896 → 0.854): the 20b checker cites more loosely than the
+  120b answer model (it added a table note and a neighbouring section) and once chose the wrong
+  Schedule XIV paragraph. So the shipped v7 keeps the generator's citations and uses the
+  verdict only as a gate (`verify_citations: false`), which makes it identical to v6 on dev_mini
+  at +83% LLM tokens (2,094 gpt-oss-20b tokens per answered question).
+- **Whether the gate is worth that cost depends on whether it catches wrong answers**, which
+  dev_mini cannot show (v6 left none with an ungrounded number). `python -m evals.verifier_check`
+  measures it directly: it corrupts one quantity in each correct v6 answer (30% → 91%, Rs
+  1,00,000 → Rs 300001, 1-April → 4-April) and asks the checker about both versions. Result:
+  *pending (scheduled after the 2026-10-07 quota reset)*.
+- Cost of the phase: 52,425 gpt-oss-20b tokens (the re-run as a gate replayed every check from
+  cache); 0 gpt-oss-120b.
 
 ### Caveats
 
@@ -211,4 +340,9 @@ Per-type fact recall:
 - **v1 versus v0 on retrieval depends on the split.** On the 138-question dev set v1 edges v0 (recall@5 0.472 vs 0.460); on dev_mini the order reverses (0.500 vs 0.562). Both gaps are small, which is the point: cleaning has no real effect either way, and dev_mini is too small to resolve it.
 - Table retrieval scores are inflated: templated table questions reuse the row's own wording.
 - 220 of the 222 golden questions were bulk-accepted after spot checks, not individually verified.
+- **Amendment direction is unmeasured.** Reviewing answers in the frontend's Before / Now view
+  showed v6 stating the s99(2) substitution backwards ("from (1)(a)(ii) to (1)(a)(i)"; it was
+  (a)(i) → (a)(ii)), which `amendment_type` (a keyword check) scores as correct.
+- **v6's scope prompt and the definitions tool's one-provision rule were both revised after
+  looking at dev results.** The frozen test split is the check on both.
 - Latency is not comparable across versions: most answers were replayed from cache, and v0's p50 rests on 6 measured calls.

@@ -13,6 +13,8 @@ from evals.metrics import aggregate, fact_match, token_f1
     ("Rates in force apply", "rates in force"),
     ("the rate is 2 % for education", "2%"),
     ("TDS at 1 % of the consideration", "1%"),
+    ("The rate of tax deducted at source is 2 percent.", "2%"),
+    ("at the rate of thirty per cent; or 30 per cent", "30%"),
 ])
 def test_fact_matching_tolerates_formatting(answer, fact):
     assert contains(answer, fact)
@@ -37,6 +39,7 @@ def test_soft_fact_match_accepts_paraphrase(answer, fact):
     ("the period may be extended by a further forty days", "a further period of thirty days"),
     ("the rate is 20%", "rate of 2%"),
     ("the rate is 20 %", "rate of 2%"),
+    ("the rate is 20 per cent", "rate of 2%"),
     ("the deduction is allowed in the year of purchase", "in the tax year the asset was sold"),
 ])
 def test_soft_fact_match_rejects_wrong_content(answer, fact):

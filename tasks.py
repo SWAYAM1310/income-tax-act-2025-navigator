@@ -24,7 +24,7 @@ def run(*cmd: str) -> None:
 
 
 def lint() -> None:
-    run(sys.executable, "-m", "ruff", "check", "src", "tests", "evals", "tasks.py")
+    run(sys.executable, "-m", "ruff", "check", "src", "tests", "evals", "scripts", "tasks.py")
 
 
 def test() -> None:

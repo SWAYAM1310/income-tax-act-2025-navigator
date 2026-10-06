@@ -34,8 +34,9 @@ def retrieve(conn: psycopg.Connection, jina: JinaClient, question: str, cfg: dic
     else:
         raise ValueError(f"retrieval mode {mode!r} has no chat/eval path")
     # what changed lives in the Act's endnotes, not in the provision text
+    # `endnotes: structured` (v6) also states the parsed change type in words
     if r.get("endnotes"):
-        hits = attach(conn, hits)
+        hits = attach(conn, hits, structured=r["endnotes"] == "structured")
     return hits
 
 

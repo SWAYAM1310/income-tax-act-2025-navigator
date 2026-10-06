@@ -1,8 +1,8 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-06. **Phases 0-6 are DONE: the ladder v0-v5 is measured end-to-end.** v5 on dev_mini: fact recall 0.771 (oracle 0.833), citation precision 0.917, amendment type 0.833; dev retrieval recall@5 0.923. All end-to-end numbers were **rescored on 2026-10-06** after a `2 %` (U+202F) normalisation fix. A working chatbot exists (`python -m statnav.chat`). Update this file at the end of every session or phase._
+_Last updated: 2026-10-06. **Phases 0-10 are DONE.** Ladder v0-v7 measured; best is v6 (LangGraph agent over v5): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00; dev recall@5 0.940. v7 (verifier gate) = v6 at +83% tokens (mutation test pending). FastAPI + MCP server serve v6; the Vite frontend (`frontend/`) is built and smoke-tested. Next: Phase 11 (CI, final test-split runs, README). Update this file at the end of every session or phase._
 
-> **Resume here:** see "Next steps" step 1 (Phase 7+). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). The 2026-10-06 work is committed and pushed (8a1cc24).
+> **Resume here:** see "Next steps" step 1. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). Phase 6 is committed (8a1cc24); **the Phase 7-10 work (v6, v7, API, MCP, frontend) is uncommitted** (ask before committing).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -154,22 +154,109 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
   | | Fact rec. | Cite prec. | Cite rec. | Grounded | Table exact | Amend. type | Refusal P / R | LLM tok/q |
   |---|---|---|---|---|---|---|---|---|
   | v2 | 0.583 | 0.646 | 0.583 | 0.683 | 1.000 | 0.167 | 0.42 / 0.83 | 2,155 |
-  | v3 | 0.604 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.50 / 0.83 | 2,123 |
-  | v4 | 0.750 | 0.896 | 0.833 | 1.000 | 0.833 | 0.833 | 0.83 / 0.83 | 2,335 |
-  | v5 | **0.771** | **0.917** | **0.854** | 0.952 | 0.833 | 0.833 | 0.83 / 0.83 | 2,454 |
+  | v3 | 0.562 | 0.729 | 0.646 | 0.772 | 1.000 | 0.167 | 0.50 / 0.83 | 2,126 |
+  | v4 | 0.708 | 0.896 | 0.833 | 1.000 | 0.833 | 0.833 | 0.83 / 0.83 | 2,342 |
+  | v5 | **0.792** | **0.917** | **0.854** | 0.952 | 0.833 | 0.833 | 0.83 / 0.83 | 2,444 |
   | oracle | 0.833 | 1.000 | 0.917 | 1.000 | 1.000 | 0.667 | 1.00 / 0.83 | 920 |
 
-  - **Answer to the open question: yes.** v3 alone was ~v2 end-to-end (amendment fact recall 0.17);
-    v4's endnotes take amendment fact recall to 0.75 (= oracle), amendment type 0.167 → 0.833,
-    false refusals 5 → 1. Biggest end-to-end step on the ladder (+0.15 fact recall, +212 tok/q).
+  - (Rows are after the 2026-10-06 rescores and the v3-v5 re-run that followed the HNSW fix, see
+    Phase 7.)
+  - **Answer to the open question: yes.** v3 alone was no better than v2 end-to-end; v4's
+    endnotes take amendment type 0.167 → 0.833 and false refusals 5 → 1. Biggest end-to-end step
+    on the ladder (+0.15 fact recall, +216 tok/q).
   - v5: multi-hop fact recall 0.42 → 0.50 (one question, f6e5a319). Remaining gap to the oracle is
     lookup (0.83 vs 1.00) and multi-hop (0.50 vs 0.58).
   - **Metric fix (2026-10-06):** `evals/common.py:norm` now maps `2 %` / `2 %` to `2%`. The
     model writes percentages with U+202F, so correct table answers scored 0 (v5 table exact
     looked like 0.333; it is 0.833) and their numbers counted as ungrounded. All 7 dev_mini rows
-    were rescored from cache (answers/retrieval/citations byte-identical, 0 Groq tokens); v1-v5 and
-    the oracle moved, v0 did not. Tests added in `tests/test_eval_metrics.py` (86 offline pass).
+    were rescored from cache (answers/retrieval/citations byte-identical, 0 Groq tokens). A second
+    pass also maps "2 per cent"/"2 percent" to "2%" (this moved v0's table exact 0.500 → 0.833).
   - The last v4/v5 table miss (a8fea698) is wording: "the rate 'in force'" vs gold "Rates in force".
+- **Phase 7, v6 LangGraph agent — DONE (2026-10-06, uncommitted).** Write-up in `results/ladder.md`.
+  - `src/statnav/agent/`: `graph.py` (LangGraph `StateGraph`: classify → refuse | retrieve →
+    tools → pack → generate; `Agent.run()`), `router.py` (deterministic route + gpt-oss-20b scope
+    check), `tools.py` (442 defined terms from `"X" means/includes` clauses → defining clause at
+    rank 1). Config `configs/versions/v6.yaml` (`agent: {scope_check, definitions}`,
+    `endnotes: structured`). `Answerer` (chat) and `evals/run.py` both run the graph.
+  - Structured endnotes (`retrieve/amend.py:render`, v6 only):
+    `Endnote 52 [applies to Schedule XIV, paragraph 4(3); amendment type: inserted; by Act No. 4 of 2026; with effect from 1-4-2026]: Ins. by ...`.
+    v4/v5/oracle keep the raw `Endnote 52: Ins. by ...` shape.
+  - Dev (n = 138), v5 → v6: recall@5 0.923 → **0.940**, MRR 0.882 → **0.913**, hit@1 0.831 →
+    **0.871**; lookup recall@5 0.914 → 0.971, hit@1 0.771 → 0.914 ("transfer", "India" fixed).
+    Scope check precision/recall **1.00/1.00** (14 out-of-scope caught, 0 of 124 answerable refused).
+  - dev_mini, v5 → v6: fact recall 0.792 → **0.875**, cite prec. 0.917 → 0.958, cite rec. 0.854 →
+    0.896, table exact 0.833 → 1.000, amendment type 0.833 → 1.000, refusal P/R 0.83/0.83 →
+    **1.00/1.00**, LLM tok/q 2,444 → 2,531 (incl. ~390 gpt-oss-20b). Three questions improve, none
+    regress. Remaining gap to the oracle: **multi-hop 0.50 vs 0.58**.
+  - **Tuned on dev (say so in the README):** the first scope prompt let gpt-oss-20b judge from
+    memory whether the Act covers a topic and refused 5/124 answerable dev questions; the revised
+    prompt judges the topic only. The definitions tool keeps one defining provision per term after
+    a second one cost a multi-hop question on dev.
+  - **Retrieval bug fixed (affects v3+):** `hybrid.under_ids` / `xref_hits` used a filtered
+    `ORDER BY embedding <=> q LIMIT k`, which Postgres ran as an HNSW scan + post-filter that only
+    sees ~`ef_search` neighbours, silently dropping candidates (s2(52) "India" came back empty).
+    Now ranked exactly via a MATERIALIZED CTE (`hybrid._exact`). Dev recall/MRR/hit@1 unchanged
+    for v3-v5; 4-5 dev_mini questions per version got new evidence, so v3-v5 dev_mini were re-run.
+  - Groq 2026-10-06: 117,485 gpt-oss-120b + 112,199 gpt-oss-20b tokens. Jina: 0.
+  - 108 offline tests pass (`tests/test_agent.py` new: routing, definitions, scope, graph paths
+    with fake LLMs; `tests/test_hybrid.py` has a DB regression test for the HNSW bug).
+- **Phase 8, v7 verifier — DONE as a measured negative result (2026-10-06, uncommitted).**
+  - `src/statnav/agent/verify.py` + the graph's `verify` node (`agent: {verify: true}`):
+    gpt-oss-20b (role `verify`) splits the answer into claims and names supporting passages over
+    the whole evidence; unsupported claims send the answer back to `generate` once
+    (`answer.generate(..., retry=(previous_text, unsupported))`, a second conversation turn).
+  - dev_mini: the checker judged all 24 answers supported first time; v7 = v6 exactly (fact
+    0.875, cite P/R 0.958/0.896) at 4,625 vs 2,531 LLM tok/q. Re-deriving citations from the
+    checker's support (`verify_citations: true`) was *worse* (cite P/R 0.896/0.854): the 20b
+    checker cites loosely and once picked the wrong Schedule XIV paragraph. Shipped as a gate.
+  - The multi-hop "under-citation" hypothesis was wrong: e.g. s173 alone supports the "fixed
+    place of business" answer; the gold's second hop (s66(16)) is needed to find it, not to
+    support it.
+  - **Pending:** `python -m evals.verifier_check --version v6 --split dev_mini` (mutation test:
+    corrupts one quantity in each of 11 correct v6 answers; catch rate vs false-flag rate) was
+    scheduled in the background for 00:20 UTC 2026-10-07 (gpt-oss-20b quota was spent: 175K of
+    195K on 2026-10-06). Output: `results/v7/dev_mini/verifier_check_v6.json`. Fill the result into
+    the Phase 8 section of `results/ladder.md` (marked *pending*). If the background job did not
+    run, run it by hand (~29K gpt-oss-20b tokens; the 11 original-answer checks are cached).
+- **Phase 9, MCP server + FastAPI — DONE (2026-10-06, uncommitted).**
+  - `src/statnav/repo.py`: read-only lookups shared by both (`provision` with children +
+    amendments + table rows, `table_rows`, `amendments` with "applies to", `subtree_text`).
+  - `src/statnav/api/app.py` (`python -m statnav.api`, port 8000, docs at /docs): `POST /query`
+    streams SSE (`step` per graph node → `evidence` → `answer` → `done`, or `error`);
+    `GET /provisions/{id}`, `/tables/{table_id}/rows?sl_no=`, `/amendments/{id}`, `/evals?split=`,
+    `/health`. CORS allows the Vite dev server (localhost:5173). One lock serialises answering.
+    `Agent.stream()` (LangGraph `stream_mode="updates"`) drives the step events; `Agent.run()` is
+    built on it; `answer.from_agent()` / `failed()` turn results into `Answer`s.
+  - `src/statnav/mcp_server.py` (mcp 2.x `MCPServer`, stdio): tools `search_act`, `get_provision`,
+    `get_table_rows`, `get_amendments`, `ask`; a bad id raises `ToolError` (client sees is_error).
+  - Exit check: `tests/test_api.py` (10; fake LLMs + DB), `tests/test_mcp.py` (2, in-process),
+    and `scripts/mcp_inspect.py` (launches the server over stdio, calls every lookup tool: PASS).
+    Live smoke test of the API on a cached question returned the full SSE sequence.
+  - **Bug fixed:** `index.db.connect()` was never autocommit, so every long-lived reader sat "idle
+    in transaction" holding a read lock; `index.load` (TRUNCATE) then blocked forever (it hung
+    `tasks.py check` once the API/MCP tests kept a connection open). `connect(autocommit=True)`
+    is now used by `Answerer` and the API.
+  - 136 offline tests pass (`tasks.py check`, which now also lints `scripts/`).
+- **Phase 10, Vite + React + TS frontend — DONE (2026-10-06, uncommitted).** `frontend/`
+  (README there). Two views: *Ask the Act* (question → streamed agent steps → answer + citation
+  chips; a citation opens the "statute sheet": marginal note = section heading, clause hierarchy,
+  Finance Act, 2026 words marked in turmeric with endnote numbers, a Now / Before toggle,
+  endnotes; full-screen overlay on phones) and *How well it answers* (fact recall and dev
+  recall@5 per version as column charts, v6 highlighted, oracle reference rule; full metrics
+  table). A persistent "Not tax advice" line. Fonts: Spectral + Atkinson Hyperlegible.
+  - Backend support added: `provisions.text_marked` column (schema `ALTER TABLE ... ADD COLUMN
+    IF NOT EXISTS`, loaded by `index.load`), `repo.before_after()` (rebuilds the pre-2026
+    wording from `{{fn:N}}[...]` brackets + endnotes: 121 of 143 amended provisions rebuilt, 13
+    shown as wholly inserted, 9 honestly "earlier wording not printed"), `repo.subtree()`, and
+    `section` (the marginal-note heading) on `/provisions/{id}`; amendments there now cover the
+    whole subtree. Tests: `tests/test_repo.py` (5).
+  - Exit check: `cd frontend && npm run test:e2e` — Playwright, desktop + phone, 8/8 pass,
+    API mocked with fixtures captured from the real API (`frontend/e2e/fixtures`), so no keys.
+    `npm run lint` (oxlint) clean; `npm run build` (tsc + vite) clean.
+  - **Found through the UI:** v6's answer to "How was section 99(2) amended?" states the change
+    backwards ("from (1)(a)(ii) to (1)(a)(i)"); the endnote and the Before view show (a)(i) was
+    replaced by (a)(ii). `amendment_type` scores it correct because it only checks the word
+    "substituted". See Known issues.
 - Earlier Phase 3 notes:
   - **222 candidates** in `evals/data/candidates.jsonl`: lookup 54 (32 templated definitions + 22 LLM-drafted numeric), table 45, amendment 48, multi-hop 45 (LLM-drafted from cross-reference pairs), refusal 30. Drafting used ~40K gpt-oss-20b tokens.
   - **All 222 accepted into `evals/data/golden.jsonl`.** The user reviewed 2 individually and then explicitly instructed bulk acceptance of the other 220 (2026-10-02). These are logged as `bulk-accept (user instruction)` in `verification_log.csv`. They were not individually edited, so the README must say the questions were spot-checked, not individually verified.
@@ -213,8 +300,14 @@ python -m uv run python tasks.py check             # lint + db up/load + offline
 .venv/Scripts/python.exe -m statnav.index.load     # artefacts -> Postgres
 .venv/Scripts/python.exe -m statnav.index.build --version v2 [--dry-run]   # embed + pgvector
 .venv/Scripts/python.exe -m statnav.retrieve.search "how is agricultural income defined" -k 5
-.venv/Scripts/python.exe -m statnav.chat                       # interactive chatbot (v2)
+.venv/Scripts/python.exe -m statnav.chat                       # interactive chatbot (default v6)
 .venv/Scripts/python.exe -m statnav.chat "<question>"          # one-shot; --evidence, --version, --verbose
+.venv/Scripts/python.exe -m statnav.api                        # HTTP API on :8000 (/docs)
+.venv/Scripts/python.exe -m statnav.mcp_server                 # MCP server (stdio)
+cd frontend && npm run dev                                     # UI on :5173 (needs the API)
+cd frontend && npm run test:e2e                                # Playwright smoke test (no API needed)
+.venv/Scripts/python.exe scripts/mcp_inspect.py [--ask]        # exercise the MCP tools over stdio
+.venv/Scripts/python.exe -m evals.verifier_check --version v6 --split dev_mini   # v7 mutation test
 .venv/Scripts/python.exe -m evals.build.generate [--llm]   # (re)draft candidates; never overwrites reviewed ones
 .venv/Scripts/python.exe -m evals.review --reviewer <name> [--type table]   # HUMAN REVIEW (a/e/r/s/q)
 .venv/Scripts/python.exe -m evals.splits [--freeze]  # dev / test / dev_mini from golden.jsonl
@@ -229,12 +322,15 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - `src/statnav/ingest/`: PDF → artefacts (`data/parsed/7db7feb6-v3/`)
 - `src/statnav/embed/`: Jina client, sqlite cache, token counting
 - `src/statnav/index/`: schema, loader, chunkers (v0/v1/v2), index build
-- `src/statnav/retrieve/`: `dense.py` (pgvector k-NN; returns `embed_text` with breadcrumbs), `search.py`
+- `src/statnav/retrieve/`: `dense.py` (pgvector k-NN; returns `embed_text` with breadcrumbs), `hybrid.py` (RRF of dense/ids/under/fts + xref expansion), `ids.py` (provision refs in questions), `amend.py` (endnotes), `route.py` (config → retriever), `search.py`
+- `src/statnav/agent/`: v6/v7 LangGraph agent (`graph.py`, `router.py`, `tools.py`, `verify.py`)
 - `src/statnav/answer.py`: the generation path shared by the chat and `evals/run.py` (prompt, evidence packing, citation parsing, `Answerer`)
 - `src/statnav/chat.py`: interactive/one-shot CLI chatbot
+- `src/statnav/repo.py`: read-only Act lookups; `src/statnav/api/`: FastAPI app; `src/statnav/mcp_server.py`: MCP tools; `scripts/mcp_inspect.py`
+- `frontend/`: Vite + React + TS UI (`src/api.ts`, `src/components/{AskView,StatuteSheet,LadderView,ColumnChart}.tsx`, `e2e/`)
 - `src/statnav/llm/client.py`: Groq chat with cache, rate limiter and daily ledger
-- `configs/`: `base.yaml`, `models.yaml` (roles; list prices empty until verified), `versions/{v0,v1,v2,oracle}.yaml`
-- `evals/`: `common.py` (norm, artefacts), `build/generate.py`, `review.py`, `splits.py`, `run.py`, `metrics.py`, `report.py`
+- `configs/`: `base.yaml`, `models.yaml` (roles; list prices empty until verified), `versions/{v0..v7,oracle}.yaml`
+- `evals/`: `common.py` (norm, artefacts), `build/generate.py`, `review.py`, `splits.py`, `run.py`, `metrics.py`, `report.py`, `verifier_check.py` (v7 mutation test)
 - Ids:
   - provisions `s2(5)(b)`; tables `s393:tbl1`; rows `s393:tbl1#1(i)`
   - chunks `v2:<id>`; table notes `v2:s393:tbl1:note3`; window chunks `v0:<n>`
@@ -243,26 +339,40 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
-1. **Phases 7–11 per the plan** (the retrieval ladder through v5 is built; v4 endnotes and v5
-   cross-reference expansion are done): LangGraph agent with table/amendment routing and a
-   citation verifier, MCP + FastAPI, Vite frontend, CI + README. The chat already works
-   (`python -m statnav.chat`, default v5), so a web UI over `statnav.answer.Answerer` can start
-   without waiting on the agent.
-2. Consider a prompt step that makes table answers report **every** field of a cited row: the
+1. **Check the v7 mutation test** (scheduled for 00:20 UTC 2026-10-07; see Phase 8 above) and
+   fill its result into `results/ladder.md` (marked *pending*). If it did not run, run
+   `python -m evals.verifier_check --version v6 --split dev_mini` (~29K gpt-oss-20b tokens).
+2. **Phase 11: CI, packaging, final numbers, README** (plan: GitHub Actions with lint + offline
+   tests + a retrieval-only eval on 30 dev questions using committed caches so CI needs no keys;
+   `docker compose up` for db + API + frontend; **final test-split runs** (frozen split, 84
+   questions: v0, v2, v5, v6, oracle end-to-end ≈ 84 × 2.5K ≈ 210K gpt-oss-120b tokens per
+   version, i.e. several Groq days — plan the order); README with the ladder, the honest caveats
+   (bulk-accepted golden set, tuned-on-dev choices, v7 negative result) and the frontend).
+   Consider an amendment-direction metric first (see Known issues), since test numbers are final.
+3. Consider a prompt step that makes table answers report **every** field of a cited row: the
    model retrieves the right row and faithfully reports the rate but drops the threshold
    (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`, seen in the chat). Lower priority now: after the
    rescore, table fact recall is 1.00 on dev_mini from v2 on. Keep it as its own ladder version so
    it is not confounded with a retrieval change. The same step could ask the model to quote
    table cells verbatim ("Rates in force").
-3. Before reporting on **test**, run v5 (and oracle) end-to-end on more than dev_mini's 30
+4. Before reporting on **test**, run v6 (and oracle) end-to-end on more than dev_mini's 30
    questions; per-type differences on dev_mini are one question (0.17) each. A full dev run is
    ~138 × 2.4K ≈ 330K tokens, i.e. two Groq days.
-4. Optional: FTS (`retrievers: [dense, fts, ids, under]`) lifted multi-hop on dev but cost
+5. Optional: FTS (`retrievers: [dense, fts, ids, under]`) lifted multi-hop on dev but cost
    lookup; revisit only if multi-hop is still weak after the end-to-end numbers.
-5. Optional: reword the templated table questions in **dev** that copy row text, since they
+6. Optional: reword the templated table questions in **dev** that copy row text, since they
    inflate table scores. The test split is frozen, so it can't change.
 
 ## Known issues
+- **Amendment answers can state the direction of a substitution backwards, and no metric sees
+  it.** v6 on s99(2) says "from (1)(a)(ii) to (1)(a)(i)"; it was (a)(i) → (a)(ii) (the oracle made
+  the same mistake earlier). `amendment_type` checks only the change-type word, `prior_text_f1` is
+  undefined when the gold has no prior text. A direction check (does the answer put the endnote's
+  "Sub. for" words on the *old* side?) would catch it; `repo.before_after` already knows both sides.
+- **v6's scope prompt and one-provision definitions rule were revised after reading dev
+  results** (dev scope P/R 1.00/1.00 is tuned); the frozen test split is the honest check.
+- **LangGraph resolves `State` type hints at runtime,** so names in `agent/graph.py`'s `State`
+  (e.g. `Reply`) must be real imports, not `TYPE_CHECKING`-only (`# noqa: TC001`).
 - **Tables:** section 204's unnumbered rate table has 0 rows; section 352's table has stray `(i)` text before row 1; section 52's table row 3 has one stray word.
 - **Cross-references:** 95 internal references don't resolve exactly.
 - **Templated table questions copy the row text,** which inflates table retrieval scores. They were not reworded, because the dataset was bulk-accepted.

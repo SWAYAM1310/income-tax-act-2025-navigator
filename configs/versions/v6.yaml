@@ -1,0 +1,26 @@
+# v6: a LangGraph agent over v5's retrieval (`statnav/agent/graph.py`).
+#
+# What v5 still got wrong on dev / dev_mini, and the node that targets each:
+# - "What is the meaning of "transfer"?" -- dense retrieval ranks sections that *use* the word,
+#   never s2(109) that defines it (lookup misses: "transfer", "India"). The definitions tool
+#   matches the term against 442 defined terms and puts the defining clause at rank 1.
+# - Amendment answers that never name the change type: v5 read "Ins. by Act No. 4 of 2026" and
+#   wrote "amended". `endnotes: structured` states "amendment type: inserted" in words.
+# - "How do I claim a refund that is stuck on the portal?" was answered. The scope check
+#   (gpt-oss-20b, own daily quota) refuses out-of-scope questions before retrieval.
+# Retrieval is otherwise exactly v5, and the prompt and answer model are unchanged.
+description: LangGraph agent - scope check, definition lookup, structured endnotes (over v5)
+chunks: v2
+retrieval:
+  mode: hybrid
+  k: 10
+  pool: 30
+  retrievers: [dense, ids, under]
+  weights: {dense: 1.0, ids: 2.0, under: 1.0, fts: 1.0}
+  endnotes: structured
+  xref: {seed_n: 3, keep: 4, slots: 2, both_ways: true}
+agent:
+  scope_check: true
+  definitions: true
+evidence_budget: 4500
+generation: {prompt: basic}

@@ -18,6 +18,9 @@ CREATE TABLE IF NOT EXISTS provisions (
     ord         INTEGER NOT NULL           -- document order
 );
 CREATE INDEX IF NOT EXISTS provisions_parent ON provisions (parent_id);
+-- `text` with each amended bracket tagged by its endnote: "{{fn:11}}[sub-section (1)(a)(ii) or (b)]".
+-- Only set for amended provisions; drives the before/after view (repo.before_after).
+ALTER TABLE provisions ADD COLUMN IF NOT EXISTS text_marked TEXT;
 
 CREATE TABLE IF NOT EXISTS tables (
     table_id    TEXT PRIMARY KEY,          -- provision id of the table node, "s393:tbl1"
