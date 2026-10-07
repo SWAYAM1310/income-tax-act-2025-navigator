@@ -1,6 +1,8 @@
 """The evidence packing, prompt and citation parsing shared by evals and the chat."""
 
-from statnav.answer import Answer, pack, parse_citations, user_prompt
+import json
+
+from statnav.answer import Answer, AnswerTextStream, pack, parse_citations, user_prompt
 
 
 def hit(cid: str, tokens: int, **kw) -> dict:
@@ -59,3 +61,27 @@ def test_answer_provisions_dedupes_in_citation_order():
         hit("y", 1, provisions=["s2(5)", "s9"]),
     ])
     assert res.provisions == ["s2(5)", "s2(5)(a)", "s9"]
+
+
+def _stream(chunks: list[str]) -> tuple[list[str], AnswerTextStream]:
+    parser = AnswerTextStream()
+    return [parser.feed(c) for c in chunks], parser
+
+
+def test_answer_text_stream_decodes_escapes_split_across_pieces():
+    reply = json.dumps({"answer": 'Rate "2%" ₹ 20,000\nand more', "citations": ["C1"]},
+                       ensure_ascii=True)
+    pieces, parser = _stream([reply[i:i + 3] for i in range(0, len(reply), 3)])
+    assert "".join(pieces) == parser.text == 'Rate "2%" ₹ 20,000\nand more'
+    assert parser.done and parser.feed('", "x": "y"}') == ""
+
+
+def test_answer_text_stream_skips_other_keys_and_fences():
+    _, parser = _stream(['```json\n{"citations": ["C1"], "refused": false, "ans',
+                         'wer" :  "Section 2(5)', ' says so."}\n```'])
+    assert parser.text == "Section 2(5) says so."
+
+
+def test_answer_text_stream_waits_for_an_answer_key():
+    pieces, parser = _stream(["no json here", " at all"])
+    assert pieces == ["", ""] and parser.text == "" and not parser.done

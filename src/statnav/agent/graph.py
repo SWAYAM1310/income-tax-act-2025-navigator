@@ -27,6 +27,8 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, TypedDict
 
+from langchain_core.runnables import RunnableConfig  # noqa: TC002 - langgraph reads node hints
+from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
 from statnav.agent.router import route, scope
@@ -174,7 +176,7 @@ class Agent:
         return {"evidence": pack(s["hits"], self.cfg["evidence_budget"]),
                 "steps": [*s["steps"], "pack"]}
 
-    def _generate(self, s: State) -> State:
+    def _generate(self, s: State, config: RunnableConfig) -> State:
         if not s["evidence"]:
             return {"reply": None, "steps": [*s["steps"], "generate"],
                     "out": {"answer": "Nothing was retrieved for that question.",
@@ -186,8 +188,14 @@ class Agent:
         retry = None
         if s.get("retry"):
             retry = (s["reply"].text, s["retry"])
+        on_text = None
+        if (config.get("configurable") or {}).get("stream_tokens"):
+            write, attempt = get_stream_writer(), s.get("attempts", 0) + 1
+
+            def on_text(piece: str) -> None:
+                write({"text": piece, "attempt": attempt})
         try:
-            out, reply = generate(self.answer_llm, s["question"], s["evidence"], retry)
+            out, reply = generate(self.answer_llm, s["question"], s["evidence"], retry, on_text)
         except QuotaExhausted:
             raise
         except LLMError as exc:
@@ -225,11 +233,26 @@ class Agent:
         return upd
 
     # -- entry point --------------------------------------------------------------------
-    def stream(self, question: str, k: int | None = None,
-               generate: bool = True) -> Iterator[tuple[str, State]]:
-        """Yield (node name, state so far) after each node runs; the API streams these."""
+    def stream(self, question: str, k: int | None = None, generate: bool = True,
+               tokens: bool = False) -> Iterator[tuple[str, State]]:
+        """Yield (node name, state so far) after each node runs; the API streams these.
+
+        With `tokens` (the chat UI), the answer is generated with streaming and each new piece
+        of its text is also yielded, as ("token", {"text": ..., "attempt": n}); a v7 retry
+        streams again with the next `attempt`. The evals never set it.
+        """
         s: State = {"question": question, "k": k, "generate": generate, "steps": []}
-        for chunk in self.graph.stream(dict(s), stream_mode="updates"):
+        if not tokens:
+            for chunk in self.graph.stream(dict(s), stream_mode="updates"):
+                for node, upd in chunk.items():
+                    s.update(upd or {})
+                    yield node, s
+            return
+        for mode, chunk in self.graph.stream(dict(s), stream_mode=["updates", "custom"],
+                                             config={"configurable": {"stream_tokens": True}}):
+            if mode == "custom":
+                yield "token", chunk
+                continue
             for node, upd in chunk.items():
                 s.update(upd or {})
                 yield node, s

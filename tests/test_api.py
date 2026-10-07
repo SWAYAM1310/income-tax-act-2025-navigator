@@ -50,15 +50,42 @@ def test_query_streams_steps_evidence_and_a_cited_answer(hits):
         "/query", json={"question": "What does section 1 say?"})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
     ev = events(r.text)
-    assert [e for e, _ in ev] == ["step"] * 5 + ["evidence", "answer", "done"]
+    kinds = [e for e, _ in ev]
+    n = kinds.count("token")
+    # evidence as soon as it is packed, then the answer text as it is written
+    assert n > 1 and kinds == (["step"] * 4 + ["evidence"] + ["token"] * n
+                               + ["step", "evidence", "answer", "done"])
     # every graph node reports, including `tools` when it has nothing to add
     assert [d["node"] for e, d in ev if e == "step"] == ["classify", "retrieve", "tools", "pack",
                                                          "generate"]
-    assert ev[0][1]["in_scope"] is True and ev[5][1][0]["label"] == "C1"
-    ans = ev[6][1]
+    assert ev[0][1]["in_scope"] is True and ev[4][1][0]["label"] == "C1"
+    streamed = "".join(d["text"] for e, d in ev if e == "token")
+    assert streamed == "Section 1 says X." and {d["attempt"] for e, d in ev if e == "token"} == {1}
+    ans = dict(ev)["answer"]
     assert ans["answer"] == "Section 1 says X." and not ans["refused"]
     assert ans["citations"] == [{"chunk_id": "v2:s1", "provisions": ["s1"], "page_start": 4,
                                  "page_end": 4}]
+
+
+def test_the_eval_path_never_streams(hits):
+    answer = FakeLLM(json.dumps({"answer": "X.", "citations": ["C1"], "refused": False}))
+    agent = agent_graph.Agent(None, None, CFG, answer, FakeLLM('{"in_scope": true}'))
+    assert agent.run("What does section 1 say?").out["answer"] == "X."
+    assert not getattr(answer, "streamed", 0)
+
+
+def test_a_stream_that_fails_falls_back_to_the_measured_call(hits):
+    from statnav.llm.client import LLMError
+
+    class Broken(FakeLLM):
+        def chat_stream(self, *a, **k):
+            raise LLMError("stream refused")
+
+    answer = Broken(json.dumps({"answer": "Y.", "citations": ["C1"], "refused": False}))
+    r = client_with(answer, FakeLLM('{"in_scope": true}')).post(
+        "/query", json={"question": "What does section 1 say?"})
+    ev = events(r.text)
+    assert "token" not in [e for e, _ in ev] and dict(ev)["answer"]["answer"] == "Y."
 
 
 def test_out_of_scope_question_is_refused_without_evidence(hits):
@@ -74,6 +101,8 @@ def test_quota_exhaustion_is_an_error_event_not_an_answer(hits):
     class Exhausted(FakeLLM):
         def chat(self, *a, **k):
             raise QuotaExhausted("openai/gpt-oss-120b: provider says retry after 900s")
+
+        chat_stream = chat
 
     r = client_with(Exhausted(), FakeLLM('{"in_scope": true}')).post(
         "/query", json={"question": "What does section 1 say?"})

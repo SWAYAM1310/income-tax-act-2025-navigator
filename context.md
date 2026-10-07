@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-07. **Phases 0-11 DONE.** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (4eb68dc + README CI cleanup); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
+_Last updated: 2026-10-07. **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE, uncommitted.** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (4eb68dc + README CI cleanup); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
 
 > **Resume here:** the project is complete; only optional Next steps remain. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, Phase 11 final 4eb68dc, all pushed. `.github/workflows/ci.yml` is local and untracked on purpose (CI skipped).
 
@@ -279,6 +279,46 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     anything (~35K gpt-oss-120b tokens of answers sit in the cache). README's "Final numbers on
     the frozen test split" and `results/ladder.md`'s "Final numbers" section report retrieval
     only and say so; answer quality stays the dev_mini numbers.
+- **Phase 12, UI redesign + streaming chat — DONE (2026-10-07, uncommitted).** Plan:
+  `C:\Users\ASUS\.claude\plans\pasted-content-id-9071-yeah-so-giggly-fiddle.md`. The user chose
+  real token streaming, history in `localStorage`, Tailwind v4 without shadcn, and the "Act as a
+  living map" welcome.
+  - **Streaming (backend):**
+    - `ChatClient.chat_stream`: Groq `stream: true`, no `response_format`, because Groq cannot
+      stream in JSON mode. Its replies are cached under their own key, and a cache hit is
+      replayed in word-sized pieces.
+    - `answer.AnswerTextStream` decodes the `"answer"` JSON string as it arrives.
+    - `generate(on_text=...)` falls back to the JSON-mode call if the stream fails before any
+      text arrives.
+    - `Agent.stream(tokens=True)` uses LangGraph `stream_mode=["updates","custom"]` with
+      `get_stream_writer`.
+    - `POST /query` now sends `evidence` right after `pack`, then `token` events, then the
+      final `evidence`, `answer` and `done`.
+    - The evals never stream. v8 dev_mini replayed from cache gave byte-identical
+      `metrics.json`/`outputs.jsonl` at 0 tokens.
+  - **Live check:** 71 token events. The first token arrives at about 4.1 s, mostly gpt-oss
+    reasoning, which is not streamed. A cached replay streams 32 pieces in 0.3 s. The streamed
+    answer for s99(2) gets the direction right and cites `v2:s99(2)`. The test cost 3,028
+    gpt-oss-120b tokens.
+  - **UI:**
+    - True black, with one green accent (`--color-jade`, switchable Jade/Mint/Forest). Turmeric
+      marks only amended words.
+    - `Welcome.tsx` + `ActMap.tsx`: a canvas of 536 marks, one per section, that replays the
+      recorded s99(2) answer on a single clock. It works offline and respects reduced motion.
+    - `Sidebar.tsx`: chats grouped by day, with search, rename, Markdown export and delete.
+      On phones it is a drawer.
+    - `ChatView.tsx` + `Composer.tsx`: streamed text with a caret, a step trace, Stop, Copy,
+      and an `ActStrip` showing where the passages sit among the 536 sections.
+    - `Settings.tsx`: green shade, text size and motion.
+    - Stores: `history.ts` (`statnav.chats.v1`, guarded, sheds passage text when full),
+      `ask.ts` (one in-flight question; it keeps streaming across chat switches) and `prefs.ts`.
+    - `AskView.tsx` is removed.
+  - Exit check:
+    - 157 offline tests pass (new: parser, client stream + cache + 429, API token order, the
+      eval path never streams, the stream fallback).
+    - Playwright: 14/14 on desktop + phone (welcome, citation sheet, a cut-off stream, refusal,
+      history across a reload with rename/delete/Ctrl+K, ladder).
+    - oxlint and the build are clean. Screenshots were reviewed.
 - **Phase 10, Vite + React + TS frontend — DONE (2026-10-06, uncommitted).** `frontend/`
   (README there). Two views: *Ask the Act* (question → streamed agent steps → answer + citation
   chips; a citation opens the "statute sheet": marginal note = section heading, clause hierarchy,
@@ -373,7 +413,7 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - `src/statnav/answer.py`: the generation path shared by the chat and `evals/run.py` (prompt, evidence packing, citation parsing, `Answerer`)
 - `src/statnav/chat.py`: interactive/one-shot CLI chatbot
 - `src/statnav/repo.py`: read-only Act lookups; `src/statnav/api/`: FastAPI app; `src/statnav/mcp_server.py`: MCP tools; `scripts/mcp_inspect.py`
-- `frontend/`: Vite + React + TS UI (`src/api.ts`, `src/components/{AskView,StatuteSheet,LadderView,ColumnChart}.tsx`, `e2e/`)
+- `frontend/`: Vite + React + TS + Tailwind v4 UI (`src/api.ts`, `src/{history,ask,prefs,actmap}.ts`, `src/components/{Welcome,ActMap,Sidebar,ChatView,Composer,Settings,StatuteSheet,LadderView,ColumnChart,Icons}.tsx`, `e2e/`)
 - `src/statnav/llm/client.py`: Groq chat with cache, rate limiter and daily ledger
 - `configs/`: `base.yaml`, `models.yaml` (roles; list prices empty until verified), `versions/{v0..v7,oracle}.yaml`
 - `evals/`: `common.py` (norm, artefacts), `build/generate.py`, `review.py`, `splits.py`, `run.py`, `metrics.py`, `report.py`, `verifier_check.py` (v7 mutation test)
@@ -407,8 +447,19 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
    lookup; revisit only if multi-hop is still weak after the end-to-end numbers.
 6. Optional: reword the templated table questions in **dev** that copy row text, since they
    inflate table scores. The test split is frozen, so it can't change.
+7. Commit Phase 12 (ask first): the backend streaming, the redesigned frontend, the tests and the
+   README/context updates. Rebuild the Docker `web` image (`docker compose build web`).
 
 ## Known issues
+- **Chat answers come from the streaming path,** which runs without JSON mode (Groq cannot
+  stream it) and is cached separately. So a chat answer can differ slightly from the one the
+  ladder measured. For s99(2), the streamed answer writes "1-April-2026" where the measured one
+  writes "1-4-2026". The final `answer` event is authoritative. The evals and MCP `ask` never
+  stream.
+- **Most of the wait before the first token is gpt-oss reasoning** (about 2 s; it is not shown).
+  After that, Groq streams the visible answer in about 0.2 s.
+- **Chat history is per browser** (`localStorage`): it does not sync across devices, and
+  clearing site data erases it.
 - **Amendment direction (fixed in v8, measured by `amendment_direction`).** Up to v7 the model
   read `Sub. for "X"` as "substituted with X" and stated substitutions backwards (v6 0/3, oracle
   2/6 on dev substitutions; v8 7/7). The metric covers only the 13 questions whose endnote quotes

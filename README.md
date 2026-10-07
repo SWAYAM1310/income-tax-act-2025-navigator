@@ -106,6 +106,10 @@ catches 14 of 16 out-of-scope ones. All versions in
    served by: FastAPI (SSE) | MCP server (5 tools) | CLI chat | Vite + React UI
 ```
 
+The chat UI streams answers token by token. Groq cannot stream in JSON mode, so the chat calls
+the model without it and reads the answer out of the JSON as it arrives. That call is cached
+separately, so a chat answer can differ slightly from the measured one; the evals never stream.
+
 - **Ingestion** (`src/statnav/ingest/`) parses the official PDF into provisions with stable ids
   (`s2(5)(b)`, `sch:XIV:4(3)`, table rows `s393:tbl1#1(i)`), links each Finance Act, 2026
   endnote to the words it amends, and resolves 98% of internal cross-references.
@@ -154,7 +158,7 @@ Then:
 ```bash
 python -m uv run python -m statnav.chat "What is the meaning of \"transfer\"?"   # CLI
 python -m uv run python -m statnav.api           # API on :8000, docs at /docs
-cd frontend && npm install && npm run dev         # UI on :5173
+cd frontend && npm install && npm run dev         # UI on :5173 (chat history stays in the browser)
 docker compose up                                 # or everything: UI on http://localhost:8080
 python -m uv run python -m statnav.mcp_server     # MCP server over stdio
 ```

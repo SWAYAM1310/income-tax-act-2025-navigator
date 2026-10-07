@@ -89,6 +89,15 @@ class FakeLLM:
         self.calls.append(messages)
         return Reply(self.texts.pop(0), {"total_tokens": 42}, "fake", False, 0.1)
 
+    def chat_stream(self, messages, on_delta, max_tokens=None):  # noqa: ARG002
+        """Streams the canned reply in 7-character pieces; `streamed` counts these calls."""
+        self.streamed = getattr(self, "streamed", 0) + 1
+        self.calls.append(messages)
+        text = self.texts.pop(0)
+        for i in range(0, len(text), 7):
+            on_delta(text[i:i + 7])
+        return Reply(text, {"total_tokens": 42}, "fake", False, 0.1)
+
 
 def test_scope_reads_the_verdict():
     v = scope(FakeLLM('{"in_scope": false, "reason": "asks about the e-filing portal"}'), "q")

@@ -53,7 +53,7 @@ export function ColumnChart({ title, subtitle, data, highlight, reference, forma
         {reference && (
           <g>
             <line x1={LEFT} x2={width - 8} y1={y(reference.value)} y2={y(reference.value)} className="ref" />
-            <text x={width - 8} y={y(reference.value) - 6} textAnchor="end" className="ref-label">
+            <text x={LEFT + 4} y={y(reference.value) - 6} className="ref-label">
               {reference.label} {format(reference.value)}
             </text>
           </g>

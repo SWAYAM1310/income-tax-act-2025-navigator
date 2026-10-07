@@ -4,6 +4,7 @@ import { getEvals } from '../api'
 import { ColumnChart } from './ColumnChart'
 
 const SHIPPED = 'v8'
+const WRAP = 'mx-auto max-w-6xl px-4 pt-8 pb-16 sm:px-8'
 const pct = (v: number | undefined) => (v == null ? '—' : v.toFixed(3))
 const int = (v: number | undefined) => (v == null ? '—' : Math.round(v).toLocaleString())
 
@@ -18,24 +19,24 @@ export function LadderView() {
       .catch(() => setError('The results could not be loaded. Start the API with: python -m statnav.api'))
   }, [])
 
-  if (error) return <div className="ladder"><p className="error" role="alert">{error}</p></div>
-  if (!mini || !dev) return <div className="ladder"><p className="hint">Loading the results…</p></div>
+  if (error) return <div className={WRAP}><p className="rounded-lg bg-refusal-tint px-3 py-2 text-sm text-refusal" role="alert">{error}</p></div>
+  if (!mini || !dev) return <div className={WRAP}><p className="text-sm text-ink-soft">Loading the results…</p></div>
 
   const versions = mini.filter((r) => r.version !== 'oracle')
   const oracle = mini.find((r) => r.version === 'oracle')
   const recall = new Map(dev.map((r) => [r.version, r.metrics['recall@5']]))
 
   return (
-    <div className="ladder">
-      <h2 className="ladder-title">How each change to the pipeline moved the scores</h2>
-      <p className="ladder-lede">
+    <div className={WRAP}>
+      <h2 className="m-0 max-w-[32ch] font-serif text-[clamp(1.7rem,3.5vw,2.3rem)] leading-tight font-medium">How each change to the pipeline moved the scores</h2>
+      <p className="mt-3 mb-8 max-w-[68ch] text-ink-soft">
         Every version adds one change to the one before it and is scored on the same questions:
         30 end-to-end (6 each of lookups, rate tables, amendments, multi-step questions and
         out-of-scope questions) and 138 for retrieval. One question moves a per-type score by 0.17,
         so read small end-to-end differences as noise. Version {SHIPPED} answers in this app.
       </p>
 
-      <div className="charts">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-x-12 gap-y-8">
         <ColumnChart
           title="Facts found in the answer"
           subtitle="Share of the expected facts each answer states (30 questions, end to end)"
@@ -51,7 +52,7 @@ export function LadderView() {
         />
       </div>
 
-      <div className="table-scroll">
+      <div className="mt-10 overflow-x-auto">
         <table className="metrics">
           <caption>All scores, end to end on 30 questions unless marked</caption>
           <thead>
@@ -84,7 +85,7 @@ export function LadderView() {
           </tbody>
         </table>
       </div>
-      <p className="hint">Source: results/&lt;version&gt;/&lt;split&gt;/metrics.json. The write-up of each step is in results/ladder.md.</p>
+      <p className="mt-3 text-xs text-ink-soft">Source: results/&lt;version&gt;/&lt;split&gt;/metrics.json. The write-up of each step is in results/ladder.md.</p>
     </div>
   )
 }

@@ -3,8 +3,12 @@
     python -m statnav.api                 # uvicorn on http://127.0.0.1:8000 (docs at /docs)
 
 - `POST /query` streams one answer as server-sent events: a `step` event per agent node
-  (classify, retrieve, definitions, pack, generate, verify), then `evidence`, then `answer`, then
-  `done` (or `error`). Non-agent versions skip the `step` events.
+  (classify, retrieve, definitions, pack, generate, verify); `evidence` as soon as the passages
+  are packed; `token` events with the answer text as the model writes it (`attempt` goes up when
+  a v7 retry rewrites the answer); then `evidence` again, `answer` and `done` (or `error`).
+  Non-agent versions send only `evidence`, `answer` and `done`. Streamed answers come from a
+  chat-only call without JSON mode (Groq cannot stream it), so they can differ slightly from
+  the answers the eval ladder measures; `answer` is the final word.
 - `GET /provisions/{id}`, `GET /tables/{table_id}/rows`, `GET /amendments/{id}` serve the Act
   itself from Postgres (`statnav.repo`), so the frontend can show what a citation points at.
 - `GET /evals?split=dev_mini` returns each ladder version's committed metrics.
@@ -119,8 +123,15 @@ def stream_answer(services: Services, q: QueryIn) -> Iterator[str]:
             bot = services.bot(q.version)
             if bot.agent is not None:
                 state: dict = {}
-                for node, state in bot.agent.stream(q.question, q.k):  # noqa: B007
+                for node, upd in bot.agent.stream(q.question, q.k, tokens=True):
+                    if node == "token":
+                        yield _sse("token", upd)
+                        continue
+                    state = upd
                     yield _sse("step", _step(node, state))
+                    if node == "pack":
+                        yield _sse("evidence", [_passage(h, n)
+                                                for n, h in enumerate(state["evidence"], 1)])
                 res = from_agent(bot.agent.result(q.question, state))
             else:
                 res = bot.ask(q.question, q.k)

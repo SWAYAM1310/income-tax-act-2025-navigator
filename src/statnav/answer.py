@@ -11,6 +11,8 @@ the evidence packing here; eval-only concerns (oracle context, gold metrics) sta
 
 from __future__ import annotations
 
+import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -75,14 +77,76 @@ def parse_citations(out: dict, evidence: list[dict]) -> list[dict]:
     return cited
 
 
+class AnswerTextStream:
+    """Pull the "answer" string out of a JSON reply while it is still arriving.
+
+    `feed(delta)` returns the answer characters that `delta` completed, decoded (escapes such as
+    `\"`, `\n` and `₹` are resolved even when split across deltas). Everything outside
+    the "answer" value (other keys, a code fence) is ignored.
+    """
+
+    _START = re.compile(r'"answer"\s*:\s*"')
+    _ESCAPES = {'"': '"', "\\": "\\", "/": "/", "b": "\b", "f": "\f", "n": "\n", "r": "\r",
+                "t": "\t"}
+
+    def __init__(self) -> None:
+        self.buf = ""
+        self.pos: int | None = None  # where the undecoded answer text starts in `buf`
+        self.done = False
+        self.text = ""
+
+    def feed(self, delta: str) -> str:
+        if self.done:
+            return ""
+        self.buf += delta
+        if self.pos is None:
+            m = self._START.search(self.buf)
+            if not m:
+                return ""
+            self.pos = m.end()
+        out, i, buf = [], self.pos, self.buf
+        while i < len(buf):
+            c = buf[i]
+            if c == '"':
+                self.done = True
+                i += 1
+                break
+            if c != "\\":
+                out.append(c)
+                i += 1
+                continue
+            if i + 1 >= len(buf):
+                break  # the escape's second half has not arrived yet
+            e = buf[i + 1]
+            if e == "u":
+                if i + 6 > len(buf):
+                    break
+                try:
+                    out.append(chr(int(buf[i + 2:i + 6], 16)))
+                except ValueError:
+                    out.append(buf[i:i + 6])
+                i += 6
+            else:
+                out.append(self._ESCAPES.get(e, e))
+                i += 2
+        self.pos = i
+        piece = "".join(out)
+        self.text += piece
+        return piece
+
+
 def generate(llm: ChatClient, question: str, evidence: list[dict],
-             retry: tuple[str, list[str]] | None = None) -> tuple[dict, Reply]:
+             retry: tuple[str, list[str]] | None = None,
+             on_text: Callable[[str], None] | None = None) -> tuple[dict, Reply]:
     """One answer call: the parsed {"answer", "citations", "refused"} and the raw reply.
 
     `retry` = (the previous reply's text, the claims the v7 checker found unsupported) makes it
-    a second turn of the same conversation. Raises `QuotaExhausted` / `LLMError` from the
-    client; callers decide how to surface them. A reply that is not valid JSON is kept as a
-    plain, uncited answer.
+    a second turn of the same conversation. `on_text` (the chat UI only, never the evals)
+    streams the answer: it is called with each new piece of the "answer" text. Streaming drops
+    JSON mode, which Groq cannot stream, so the reply can differ from the measured one; if the
+    stream fails before any text arrives, the measured JSON-mode call is used instead.
+    Raises `QuotaExhausted` / `LLMError` from the client; callers decide how to surface them. A
+    reply that is not valid JSON is kept as a plain, uncited answer.
     """
     from statnav.llm.client import LLMError
 
@@ -93,7 +157,21 @@ def generate(llm: ChatClient, question: str, evidence: list[dict],
         messages += [{"role": "assistant", "content": previous},
                      {"role": "user", "content": RETRY_PROMPT.format(
                          unsupported="\n".join(f"- {c}" for c in unsupported))}]
-    reply = llm.chat(messages, json_mode=True)
+    reply = None
+    if on_text is not None:
+        parser = AnswerTextStream()
+
+        def forward(delta: str) -> None:
+            piece = parser.feed(delta)
+            if piece:
+                on_text(piece)
+        try:
+            reply = llm.chat_stream(messages, forward)
+        except LLMError:
+            if parser.text:
+                raise
+    if reply is None:
+        reply = llm.chat(messages, json_mode=True)
     try:
         out = reply.json()
     except (LLMError, ValueError):

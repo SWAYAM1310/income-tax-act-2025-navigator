@@ -50,6 +50,8 @@ export type AnswerPayload = {
 export type QueryEvent =
   | { type: 'step'; data: Step }
   | { type: 'evidence'; data: Passage[] }
+  /** a piece of the answer as the model writes it; a higher `attempt` (v7 retry) starts over */
+  | { type: 'token'; data: { text: string; attempt: number } }
   | { type: 'answer'; data: AnswerPayload }
   | { type: 'error'; data: { message: string } }
   | { type: 'done'; data: Record<string, never> }
