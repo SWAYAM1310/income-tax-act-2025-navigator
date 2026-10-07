@@ -153,3 +153,42 @@ def test_table_rows_and_amendments(db_client):
     assert {(a["applies_to"], a["type"]) for a in notes} == {
         ("Schedule XIV, paragraph 4(1)(a)", "substituted"),
         ("Schedule XIV, paragraph 4(3)", "inserted")}
+
+
+def test_rate_limit_per_client(hits):
+    from statnav.api import app as api_app
+    answer = FakeLLM(json.dumps({"answer": "Section 1 says X.", "citations": ["C1"],
+                                 "refused": False}))
+
+    def make(version):
+        return FakeBot(agent_graph.Agent(None, None, CFG, answer, FakeLLM('{"in_scope": true}')))
+    c = TestClient(api_app.create_app(Services(answerer=make, connect=lambda: None),
+                                      rate_limit=2))
+    q = {"question": "What does section 1 say?"}
+    a = {"x-forwarded-for": "203.0.113.7, 10.0.0.1"}
+    assert [c.post("/query", json=q, headers=a).status_code for _ in range(2)] == [200, 200]
+    r = c.post("/query", json=q, headers=a)
+    assert r.status_code == 429 and "limit" in r.json()["detail"]
+    assert int(r.headers["retry-after"]) > 0
+    # another visitor has their own allowance
+    assert c.post("/query", json=q, headers={"x-forwarded-for": "198.51.100.2"}).status_code == 200
+
+
+def test_rate_limit_window_slides():
+    from statnav.api.app import RateLimit
+    now = [0.0]
+    rl = RateLimit(1, window=60, clock=lambda: now[0])
+    assert rl.retry_after("a") == 0 and rl.retry_after("a") > 0
+    now[0] = 61
+    assert rl.retry_after("a") == 0
+    assert RateLimit(0).retry_after("a") == 0  # 0 = unlimited
+
+
+def test_cors_origins_from_env(monkeypatch):
+    monkeypatch.setenv("STATNAV_CORS_ORIGINS", "https://navigator.vercel.app/, https://x.dev")
+    c = TestClient(create_app(Services(answerer=lambda v: None, connect=lambda: None)))
+    pre = {"Access-Control-Request-Method": "POST"}
+    ok = c.options("/query", headers={"Origin": "https://navigator.vercel.app", **pre})
+    assert ok.headers.get("access-control-allow-origin") == "https://navigator.vercel.app"
+    bad = c.options("/query", headers={"Origin": "https://evil.example", **pre})
+    assert "access-control-allow-origin" not in bad.headers

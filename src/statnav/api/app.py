@@ -21,11 +21,14 @@ database connection and the Groq clients (per-minute token windows) are not shar
 from __future__ import annotations
 
 import json
+import os
 import threading
+import time
+from collections import deque
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -70,6 +73,47 @@ class Services:
                 self._connect = lambda: connect(autocommit=True)
             self._conn = self._connect()
         return self._conn
+
+
+class RateLimit:
+    """At most `limit` questions per client in any `window` seconds (0 = unlimited).
+
+    In memory, so it resets when the process restarts; that is enough to stop one visitor
+    from spending the whole shared Groq quota on a public deployment.
+    """
+
+    def __init__(self, limit: int, window: float = 3600.0,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        self.limit, self.window, self._clock = limit, window, clock
+        self._seen: dict[str, deque[float]] = {}
+        self._lock = threading.Lock()
+
+    def retry_after(self, client: str) -> int:
+        """0 and the question counted if `client` may ask now, else seconds until it may."""
+        if self.limit <= 0:
+            return 0
+        now = self._clock()
+        with self._lock:
+            q = self._seen.setdefault(client, deque())
+            while q and q[0] <= now - self.window:
+                q.popleft()
+            if len(q) >= self.limit:
+                return max(1, int(q[0] + self.window - now) + 1)
+            q.append(now)
+            return 0
+
+
+def client_ip(request: Request) -> str:
+    """The visitor's address: behind a proxy (Railway) it is the first X-Forwarded-For hop."""
+    fwd = request.headers.get("x-forwarded-for", "")
+    if fwd.strip():
+        return fwd.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def _env_origins() -> list[str]:
+    return [o.strip().rstrip("/") for o in os.environ.get("STATNAV_CORS_ORIGINS", "").split(",")
+            if o.strip()]
 
 
 def _sse(event: str, data: object) -> str:
@@ -175,15 +219,23 @@ def eval_summary(split: str, results: Path = RESULTS) -> dict:
     return {"split": split, "versions": rows}
 
 
-def create_app(services: Services | None = None) -> FastAPI:
+def create_app(services: Services | None = None, rate_limit: int | None = None) -> FastAPI:
+    """`rate_limit`: questions per client per hour; None reads STATNAV_RATE_LIMIT (unset = off).
+
+    STATNAV_CORS_ORIGINS (comma-separated) adds origins allowed to call the API, e.g. the
+    deployed frontend.
+    """
     svc = services or Services()
+    if rate_limit is None:
+        rate_limit = int(os.environ.get("STATNAV_RATE_LIMIT") or 0)
+    limiter = RateLimit(rate_limit)
     app = FastAPI(title="Income-tax Act, 2025 navigator",
                   description="Cited answers about India's Income-tax Act, 2025 (as amended by "
                               "the Finance Act, 2026). Not tax advice.")
     app.state.services = svc
-    # the Vite dev server (Phase 10) runs on its own port
+    # the Vite dev server (Phase 10) runs on its own port; a deployed frontend comes from env
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173",
-                                                      "http://127.0.0.1:5173"],
+                                                      "http://127.0.0.1:5173", *_env_origins()],
                        allow_methods=["GET", "POST"], allow_headers=["*"])
 
     @app.get("/health")
@@ -191,9 +243,15 @@ def create_app(services: Services | None = None) -> FastAPI:
         return {"status": "ok", "default_version": DEFAULT_VERSION, "versions": VERSIONS}
 
     @app.post("/query")
-    def query(q: QueryIn) -> StreamingResponse:
+    def query(q: QueryIn, request: Request) -> StreamingResponse:
         if q.version not in VERSIONS:
             raise HTTPException(422, f"version must be one of {VERSIONS}")
+        wait = limiter.retry_after(client_ip(request))
+        if wait:
+            minutes = max(1, round(wait / 60))
+            raise HTTPException(429, f"Question limit reached ({limiter.limit} an hour). "
+                                     f"Try again in about {minutes} min.",
+                                headers={"Retry-After": str(wait)})
         return StreamingResponse(stream_answer(svc, q), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache"})
 

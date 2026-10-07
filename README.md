@@ -174,6 +174,41 @@ python -m uv run python tasks.py check            # lint, database load, offline
 
 Every LLM reply and embedding is cached (`.cache/`), so re-running an eval costs nothing.
 
+### Deploy (free): Railway + Vercel
+
+The API and Postgres share one Railway service, built from
+[`deploy/railway.Dockerfile`](deploy/railway.Dockerfile) (selected by `railway.json`). The image
+restores the published index dump at build time, so the database needs no volume and no second
+service. The UI is a static Vite build on Vercel that calls the API directly.
+
+1. **Railway** (free plan, no card). New project, then deploy this GitHub repo.
+   - Turn on *Serverless* so the service sleeps after 10 idle minutes.
+   - Add a volume at `/app/.cache`, which keeps the Groq daily ledger and the answer cache.
+   - Variables:
+     - `GROQ_API_KEY`
+     - `JINA_API_KEY`
+     - `STATNAV_RATE_LIMIT=10` (questions per hour per visitor)
+     - `STATNAV_CORS_ORIGINS=https://<your-app>.vercel.app`
+   - Generate a public domain.
+2. **Vercel** (Hobby). Import the repo with root directory `frontend`.
+   - Set `VITE_API_BASE=https://<your-service>.up.railway.app`.
+
+What "free" means here:
+- Railway's free plan has $1 of credit a month and 0.5 GB of RAM per service. The service uses
+  about 180 MB, and it fits the credit only because it sleeps between visits.
+- The first visit after a pause wakes it, and the UI says so while it waits.
+- Without a card Railway cannot bill; if the credit runs out, the service stops until the next
+  month.
+- Groq's free tier (about 200K tokens a day) is shared by every visitor; the per-visitor limit
+  keeps one person from using it all.
+
+Test the image locally:
+
+```bash
+docker build -f deploy/railway.Dockerfile -t statnav-railway .
+docker run -p 8000:8000 --env-file .env statnav-railway
+```
+
 ## Repository
 
 | Path | What is there |

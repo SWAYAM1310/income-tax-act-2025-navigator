@@ -1,6 +1,46 @@
-// Typed client for the FastAPI app (src/statnav/api/app.py), reached through the /api proxy.
+// Typed client for the FastAPI app (src/statnav/api/app.py), reached through the /api proxy in
+// development, or at VITE_API_BASE (the deployed API, e.g. on Railway) in a deployed build.
 
-const BASE = '/api'
+const BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') || '/api'
+/** A deployed API may be asleep (Railway Serverless); keep retrying this long while it boots. */
+const WAKE_MS = BASE === '/api' ? 0 : 75_000
+export const REMOTE = BASE !== '/api'
+
+const sleep = (ms: number, signal?: AbortSignal) => new Promise<void>((resolve, reject) => {
+  const t = setTimeout(resolve, ms)
+  signal?.addEventListener('abort', () => { clearTimeout(t); reject(new DOMException('Aborted', 'AbortError')) })
+})
+
+/**
+ * fetch, retrying while a sleeping server boots: its proxy answers 502-504, or (without CORS
+ * headers) the request fails outright. `onWaking` is called once, on the first retry.
+ */
+async function fetchAwake(url: string, init: RequestInit = {}, onWaking?: () => void): Promise<Response> {
+  const until = Date.now() + WAKE_MS
+  for (let n = 0; ; n++) {
+    let res: Response | null = null
+    try {
+      res = await fetch(url, init)
+      if (![502, 503, 504].includes(res.status)) return res
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') throw err
+      if (Date.now() >= until) throw err
+    }
+    if (Date.now() >= until) return res as Response
+    if (n === 0) onWaking?.()
+    await sleep(Math.min(1000 * 2 ** n, 8000), init.signal ?? undefined)
+  }
+}
+
+/** The server's own message for a failed request (FastAPI puts it in `detail`). */
+async function detailOf(res: Response): Promise<string> {
+  const body = await res.text().catch(() => '')
+  try {
+    const d = (JSON.parse(body) as { detail?: unknown }).detail
+    if (typeof d === 'string') return d
+  } catch { /* not JSON */ }
+  return body.slice(0, 200)
+}
 
 export type Step = {
   node: string
@@ -62,16 +102,17 @@ export async function streamQuery(
   onEvent: (e: QueryEvent) => void,
   signal?: AbortSignal,
 ): Promise<void> {
-  const res = await fetch(`${BASE}/query`, {
+  const res = await fetchAwake(`${BASE}/query`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ question }),
     signal,
-  })
+  }, () => onEvent({ type: 'step', data: { node: 'wake' } }))
   if (!res.ok || !res.body) {
-    const detail = await res.text().catch(() => '')
+    const detail = await detailOf(res)
     throw new Error(res.status === 422 ? 'Ask a question of at least three characters.'
-      : `The server answered ${res.status}. ${detail.slice(0, 200)}`)
+      : res.status === 429 ? detail
+      : `The server answered ${res.status}. ${detail}`)
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader()
   let buffer = ''
@@ -153,7 +194,7 @@ export type Provision = {
 }
 
 async function getJSON<T>(path: string): Promise<T> {
-  const res = await fetch(`${BASE}${path}`)
+  const res = await fetchAwake(`${BASE}${path}`)
   if (res.status === 404) throw new Error('not-found')
   if (!res.ok) throw new Error(`The server answered ${res.status}.`)
   return res.json() as Promise<T>

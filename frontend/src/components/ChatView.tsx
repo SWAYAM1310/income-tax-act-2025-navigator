@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Step } from '../api'
 import { provisionFor, shortCite } from '../api'
-import { ask, onAnswered, stop, useLive } from '../ask'
+import { ask, stop, useLive } from '../ask'
 import type { Turn } from '../history'
 import { getChat, useChats } from '../history'
 import { ActStrip } from './ActMap'
@@ -22,6 +22,7 @@ const EXAMPLES = [
 /** What each agent step did, in the reader's words. */
 function describe(s: Step): string | null {
   switch (s.node) {
+    case 'wake': return 'Woke the server (it sleeps when no one is using it)'
     case 'classify':
       return s.in_scope === false
         ? "Checked the question: it is not about the Act's text"
@@ -57,12 +58,6 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
   const stick = useRef(true)
   const turns = chat?.turns ?? []
   const busy = !!live && live.chatId === chatId
-
-  // when an answer in this chat arrives, open its first citation
-  useEffect(() => onAnswered((id, _turn, a) => {
-    const first = a.citations[0]
-    if (id === chatId && first && !a.refused) setOpen({ ...provisionFor(first.chunk_id), chunk: first.chunk_id })
-  }), [chatId])
 
   // follow the stream unless the reader has scrolled up
   useEffect(() => {

@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-07. **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE, uncommitted.** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (4eb68dc + README CI cleanup); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
+_Last updated: 2026-10-07. **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) built, tested locally and pushed; the Railway/Vercel projects are not created yet (Next steps 8).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
 
 > **Resume here:** the project is complete; only optional Next steps remain. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, Phase 11 final 4eb68dc, all pushed. `.github/workflows/ci.yml` is local and untracked on purpose (CI skipped).
 
@@ -279,7 +279,7 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     anything (~35K gpt-oss-120b tokens of answers sit in the cache). README's "Final numbers on
     the frozen test split" and `results/ladder.md`'s "Final numbers" section report retrieval
     only and say so; answer quality stays the dev_mini numbers.
-- **Phase 12, UI redesign + streaming chat — DONE (2026-10-07, uncommitted).** Plan:
+- **Phase 12, UI redesign + streaming chat — DONE (2026-10-07, b261565).** Plan:
   `C:\Users\ASUS\.claude\plans\pasted-content-id-9071-yeah-so-giggly-fiddle.md`. The user chose
   real token streaming, history in `localStorage`, Tailwind v4 without shadcn, and the "Act as a
   living map" welcome.
@@ -313,12 +313,36 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - Stores: `history.ts` (`statnav.chats.v1`, guarded, sheds passage text when full),
       `ask.ts` (one in-flight question; it keeps streaming across chat switches) and `prefs.ts`.
     - `AskView.tsx` is removed.
+  - 2026-10-07 (user request): the provision panel no longer opens by itself when an answer
+    arrives; it opens only when the reader clicks a citation (`ChatView.tsx`; e2e test updated).
   - Exit check:
     - 157 offline tests pass (new: parser, client stream + cache + 429, API token order, the
       eval path never streams, the stream fallback).
     - Playwright: 14/14 on desktop + phone (welcome, citation sheet, a cut-off stream, refusal,
       history across a reload with rename/delete/Ctrl+K, ladder).
     - oxlint and the build are clean. Screenshots were reviewed.
+- **Phase 13, free deployment (Railway API + Vercel UI) — BUILT and tested locally (2026-10-07,
+  pushed; Railway/Vercel projects not created yet).** The user chose Vercel + Railway; the plan is at
+  `C:\Users\ASUS\.claude\plans\okay-so-now-i-delegated-quiche.md`.
+  - Railway's free plan gives $1 of credit a month and 0.5 GB RAM per service, so everything
+    runs in **one sleeping service**: `deploy/railway.Dockerfile` (pgvector base, uv, index dump
+    restored at build time into `/srv/pgdata`) and `deploy/start.sh` (Postgres on 127.0.0.1, then
+    the API on `$PORT`; it pins the DB env vars). `railway.json` selects them.
+    `.gitattributes` keeps `*.sh` LF.
+  - API: `STATNAV_CORS_ORIGINS` (extra origins) and `STATNAV_RATE_LIMIT` (questions per hour per
+    IP, first `X-Forwarded-For` hop; unset = off). Over the limit it returns 429 with a
+    `detail` message (`RateLimit`, `client_ip` in `api/app.py`).
+  - UI: `VITE_API_BASE` points the build at the API. With a remote base, requests retry 502-504
+    and network errors for up to 75 s and show "Woke the server" as a step; a 429 shows the
+    server's message. `frontend/vercel.json`.
+  - Exit check: the image built and was run locally with a copy of `.cache`:
+    - `/health` ok; `/provisions/s99` served from the baked-in DB;
+    - a cached s99(2) answer streamed (0 tokens);
+    - the 4th question from one IP got a 429 and another IP still got 200;
+    - the CORS origin from env was accepted;
+    - RAM 83 MB idle, 183 MB after an answer.
+
+    `tasks.py check`: 160 passed. Playwright 16/16 (new: the 429 message).
 - **Phase 10, Vite + React + TS frontend — DONE (2026-10-06, uncommitted).** `frontend/`
   (README there). Two views: *Ask the Act* (question → streamed agent steps → answer + citation
   chips; a citation opens the "statute sheet": marginal note = section heading, clause hierarchy,
@@ -447,10 +471,22 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
    lookup; revisit only if multi-hop is still weak after the end-to-end numbers.
 6. Optional: reword the templated table questions in **dev** that copy row text, since they
    inflate table scores. The test split is frozen, so it can't change.
-7. Commit Phase 12 (ask first): the backend streaming, the redesigned frontend, the tests and the
-   README/context updates. Rebuild the Docker `web` image (`docker compose build web`).
+7. (done) Phase 12 committed as b261565.
+8. **Deploy (Phase 13)**:
+   - The user creates the Railway project from the repo, then:
+     - turns on Serverless;
+     - adds a volume at `/app/.cache`;
+     - sets `GROQ_API_KEY`, `JINA_API_KEY`, `STATNAV_RATE_LIMIT=10` and `STATNAV_CORS_ORIGINS`;
+     - generates a domain.
+   - Then a Vercel project with root `frontend` and `VITE_API_BASE=https://<railway domain>`.
+   - Then the live checks from the plan (health, one question, the 429, sleep/wake, the usage
+     page after a day).
 
 ## Known issues
+- **Free hosting can go down:** Railway's $1/month credit covers the service only while it sleeps
+  between visits. Without a card it stops, rather than bills, if the credit runs out. The first
+  visit after a sleep waits for the boot (the UI retries for up to 75 s). Jina query embeddings
+  need the key's free credit.
 - **Chat answers come from the streaming path,** which runs without JSON mode (Groq cannot
   stream it) and is cached separately. So a chat answer can differ slightly from the one the
   ladder measured. For s99(2), the streamed answer writes "1-April-2026" where the measured one

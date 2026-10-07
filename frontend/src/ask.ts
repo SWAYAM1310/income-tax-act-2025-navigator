@@ -2,7 +2,7 @@
 // arriving while the reader switches chats. The API answers one question at a time anyway.
 import { useSyncExternalStore } from 'react'
 import type { AnswerPayload } from './api'
-import { streamQuery } from './api'
+import { REMOTE, streamQuery } from './api'
 import { addTurn, updateTurn } from './history'
 
 type Live = { chatId: string; turnId: string; ctl: AbortController } | null
@@ -49,7 +49,13 @@ export function ask(chatId: string | null, question: string): string | null {
   }, ctl.signal)
     .catch((err: Error) => {
       if (err.name === 'AbortError') up((t) => ({ ...t, status: 'stopped' }), true)
-      else up((t) => ({ ...t, status: 'error', error: `${err.message} Start the API with: python -m statnav.api` }), true)
+      else {
+        // a request that never reached the server: say how to start it locally, or that it is down
+        const unreachable = err instanceof TypeError
+        const hint = !unreachable ? '' : REMOTE ? ' The server is not responding; try again in a minute.'
+          : ' Start the API with: python -m statnav.api'
+        up((t) => ({ ...t, status: 'error', error: `${err.message}${hint}` }), true)
+      }
     })
     .finally(() => {
       // a stream that ends without an answer event (server stopped) is not left "streaming"

@@ -8,6 +8,11 @@ const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, imp
 async function mockApi(page: Page) {
   await page.route('**/api/query', async (route) => {
     const q = JSON.parse(route.request().postData() ?? '{}').question as string
+    if (q.includes('one question too many')) {
+      await route.fulfill({ status: 429, contentType: 'application/json', headers: { 'retry-after': '1800' },
+        body: JSON.stringify({ detail: 'Question limit reached (10 an hour). Try again in about 30 min.' }) })
+      return
+    }
     const body = q.includes('refund') ? fixture('query-refusal.sse')
       : q.includes('"transfer"') ? fixture('query-cut-off.sse') : fixture('query-s99-2.sse')
     await route.fulfill({ status: 200, contentType: 'text/event-stream', body })
@@ -62,7 +67,10 @@ test.describe('chat', () => {
     await expect(answer).toContainText('(1)(a)(ii) or (b)')
     await expect(answer.getByRole('img', { name: /Where the passages sit in the Act: sections 99, 267, 288, 352, 533; cited: 99/ })).toBeVisible()
 
+    // the provision opens only when its citation is clicked
     const sheet = page.getByRole('complementary', { name: 'Provision' })
+    await expect(sheet).toBeHidden()
+    await answer.getByRole('button', { name: /s\. 99\(2\)/ }).click()
     await expect(sheet.getByRole('heading', { name: 'Section 99(2)' })).toBeVisible()
     await expect(sheet.locator('mark.amended')).toHaveText('sub-section (1)(a)(ii) or (b)')
     await sheet.getByRole('button', { name: 'Before' }).click()
@@ -84,6 +92,12 @@ test.describe('chat', () => {
     await expect(page.getByText('Not answered from the Act')).toBeVisible()
     await expect(page.getByText('Refused before reading the Act')).toBeVisible()
     await expect(page.locator('details.evidence')).toHaveCount(0)
+  })
+
+  test('shows the rate-limit message when the server refuses another question', async ({ page }) => {
+    await page.getByRole('textbox', { name: 'Ask about the Act' }).fill('This is one question too many')
+    await page.keyboard.press('Enter')
+    await expect(page.getByText('Question limit reached (10 an hour). Try again in about 30 min.')).toBeVisible()
   })
 
   test('keeps chats in the sidebar across reloads; rename, delete and Ctrl+K work', async ({ page }) => {
