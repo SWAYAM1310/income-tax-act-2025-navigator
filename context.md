@@ -1,8 +1,8 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-06. **Phases 0-10 DONE; Phase 11 IN PROGRESS.** Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Final test-split runs are queued (`scripts/final_runs.sh`). Update this file at the end of every session or phase._
+_Last updated: 2026-10-07. **Phases 0-11 DONE** except pushing CI (needs the `workflow` token scope). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (56d35af) except `.github/workflows/ci.yml`; the index dump is published as release `index-2026-10-06`. Remaining: pushing CI. Update this file at the end of every session or phase._
 
-> **Resume here:** see "Next steps" step 1 (Phase 11 is mid-way: final test runs queued). Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; the pgvector container `tax_project-db-1` keeps its data in a named volume, so nothing needs rebuilding). Phase 6 is committed (8a1cc24); Phases 7-10 are committed and pushed (56dfec8); Phase 11 part 1 is pushed (184f361) except `.github/workflows/ci.yml` (needs the `workflow` token scope).
+> **Resume here:** "Next steps" step 2 (CI), then the optional steps. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, all pushed. Only `.github/workflows/ci.yml` is local and untracked (needs the `workflow` token scope).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -212,12 +212,11 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
   - The multi-hop "under-citation" hypothesis was wrong: e.g. s173 alone supports the "fixed
     place of business" answer; the gold's second hop (s66(16)) is needed to find it, not to
     support it.
-  - **Pending:** `python -m evals.verifier_check --version v6 --split dev_mini` (mutation test:
-    corrupts one quantity in each of 11 correct v6 answers; catch rate vs false-flag rate) was
-    scheduled in the background for 00:20 UTC 2026-10-07 (gpt-oss-20b quota was spent: 175K of
-    195K on 2026-10-06). Output: `results/v7/dev_mini/verifier_check_v6.json`. Fill the result into
-    the Phase 8 section of `results/ladder.md` (marked *pending*). If the background job did not
-    run, run it by hand (~29K gpt-oss-20b tokens; the 11 original-answer checks are cached).
+  - **Mutation test DONE (2026-10-07):** `results/v7/dev_mini/verifier_check_v6.json`, n = 10:
+    catch rate **0.60**, false-flag rate **0.00**. Caught 6/6 corrupted rates/amounts, **0/4
+    corrupted effective dates** (evidence says `w.e.f. 1-4-2026`, answers "1-April-2026"), and
+    passed the two v6 answers that state a substitution backwards. Written into
+    `results/ladder.md` (Phase 8) and README. 30,293 gpt-oss-20b tokens.
 - **Phase 9, MCP server + FastAPI — DONE (2026-10-06, uncommitted).**
   - `src/statnav/repo.py`: read-only lookups shared by both (`provision` with children +
     amendments + table rows, `table_rows`, `amendments` with "applies to", `subtree_text`).
@@ -237,7 +236,7 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     `tasks.py check` once the API/MCP tests kept a connection open). `connect(autocommit=True)`
     is now used by `Answerer` and the API.
   - 136 offline tests pass (`tasks.py check`, which now also lints `scripts/`).
-- **Phase 11, CI + packaging + final numbers + README — IN PROGRESS (2026-10-06, uncommitted).**
+- **Phase 11, CI + packaging + final numbers + README — DONE (2026-10-07) except pushing CI.**
   - **v8 (new ladder step).** `amendment_direction` metric (`evals/metrics.py`; for the 13
     amendment questions whose endnote quotes the replaced words, reads "from X to Y" / "X replaced
     by Y" / "Y substituted for X"; abstains otherwise) showed answers stating substitutions
@@ -271,12 +270,15 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
   - **Test split so far (retrieval-only, 0 tokens):** recall@5 / MRR: v0 0.493/0.403, v1
     0.507/0.413, v2 0.640/0.586, v3 0.904/0.849, v4 same, v5 0.912/0.850. v5's multi-hop gain
     is smaller on test (+0.04 vs +0.17 on dev) and it costs a table question (0.952 → 0.905), as
-    the tuned-on-dev caveat predicted.
-  - **Queued (background, starts 00:40 UTC 2026-10-07):** `bash scripts/final_runs.sh` → v6 + v8
-    retrieval-only, then end to end v8, oracle, v2, v5, v0 on test (~1.0M gpt-oss-120b tokens
-    total, ~5-6 Groq days), sleeping through the daily cap; log in the session scratchpad.
-    If the session ended, re-run the script: it resumes from the cache. Also scheduled: the v7
-    mutation test at 00:20 UTC.
+    the tuned-on-dev caveat predicted. **v6 (2026-10-07): 0.912/0.868**, hit@1 0.809 (v5 0.912 /
+    0.850); scope check P/R **1.00/0.875** on test (2 of 16 out-of-scope questions not caught;
+    dev, where the prompt was tuned, was 1.00/1.00), 0 answerable questions refused.
+    v8 = v6 on retrieval. **These retrieval-only numbers are the final test numbers.**
+  - **End-to-end test runs STOPPED (user decision, 2026-10-07: "satisfied with the current
+    numbers").** `final_runs.sh` was killed early in the v8 end-to-end pass, before it wrote
+    anything (~35K gpt-oss-120b tokens of answers sit in the cache). README's "Final numbers on
+    the frozen test split" and `results/ladder.md`'s "Final numbers" section report retrieval
+    only and say so; answer quality stays the dev_mini numbers.
 - **Phase 10, Vite + React + TS frontend — DONE (2026-10-06, uncommitted).** `frontend/`
   (README there). Two views: *Ask the Act* (question → streamed agent steps → answer + citation
   chips; a citation opens the "statute sheet": marginal note = section heading, clause hierarchy,
@@ -383,38 +385,45 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
-1. **Check the v7 mutation test** (`results/v7/dev_mini/verifier_check_v6.json`, scheduled for
-   00:20 UTC 2026-10-07) and fill it into the Phase 8 section of `results/ladder.md`
-   (*pending*). If it did not run: `python -m evals.verifier_check --version v6 --split dev_mini`.
-2. **Finish Phase 11:**
-   - let `scripts/final_runs.sh` finish (check `results/<v>/test/run_meta.json`: n_completed ==
-     n_questions, no `incomplete`), then `python -m evals.report --split test` and fill the
-     "Final numbers on the frozen test split" section of README.md and a Phase 11 test table in
-     `results/ladder.md`;
-   - once the user has granted the `workflow` scope, commit + push `.github/workflows/ci.yml` and
-     check the first GitHub Actions run;
-   - optionally a CI retrieval eval once a dump is published (the plan's "retrieval-only eval on
-     30 dev questions" needs the dump + committed query-embedding cache).
+0. ~~Final test-split runs~~ STOPPED by the user 2026-10-07; retrieval-only test numbers are
+   final (see Phase 11 status). Do not restart `scripts/final_runs.sh` unless the user asks.
+1. ~~v7 mutation test~~ DONE 2026-10-07 (catch 0.60, false flags 0.00; see Phase 8 status).
+   Possible follow-up: a deterministic effective-date check (normalise `1-4-2026` /
+   "1 April 2026" and compare) would catch the 4 date corruptions the 20b checker missed.
+2. **Phase 11 leftovers:**
+   - **CI:** `.github/workflows/ci.yml` needs the `gh` token's `workflow` scope. The user said
+     (2026-10-07) they ran `gh auth refresh -h github.com -s workflow`, but `gh auth status`
+     still showed gist/read:org/repo only. Once it shows `workflow`, commit + push ci.yml (the
+     user has authorized pushing it) and check the first GitHub Actions run (`gh run list`).
+     Verified locally in a fresh clone already.
+   - Optional: a CI retrieval eval now that the dump is published (download the release asset in
+     the job, restore into a pgvector service container, commit the 30 dev query embeddings so
+     no Jina key is needed).
 3. Consider a prompt step that makes table answers report **every** field of a cited row: the
    model retrieves the right row and faithfully reports the rate but drops the threshold
    (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`, seen in the chat). Lower priority now: after the
    rescore, table fact recall is 1.00 on dev_mini from v2 on. Keep it as its own ladder version so
    it is not confounded with a retrieval change. The same step could ask the model to quote
    table cells verbatim ("Rates in force").
-4. (Superseded by step 2's final runs.) Before reporting on **test**, run v6 (and oracle) end-to-end on more than dev_mini's 30
-   questions; per-type differences on dev_mini are one question (0.17) each. A full dev run is
-   ~138 × 2.4K ≈ 330K tokens, i.e. two Groq days.
+4. Optional: a full **dev** end-to-end run of v8 (~138 × 2.5K ≈ 345K tokens, two Groq days) would
+   firm up the dev_mini per-type numbers (one question = 0.17 there).
 5. Optional: FTS (`retrievers: [dense, fts, ids, under]`) lifted multi-hop on dev but cost
    lookup; revisit only if multi-hop is still weak after the end-to-end numbers.
 6. Optional: reword the templated table questions in **dev** that copy row text, since they
    inflate table scores. The test split is frozen, so it can't change.
 
 ## Known issues
-- **(Fixed in v8, measured by `amendment_direction`.) Amendment answers could state the
-  direction of a substitution backwards.** v6 on s99(2) says "from (1)(a)(ii) to (1)(a)(i)"; it was (a)(i) → (a)(ii) (the oracle made
-  the same mistake earlier). `amendment_type` checks only the change-type word, `prior_text_f1` is
-  undefined when the gold has no prior text. A direction check (does the answer put the endnote's
-  "Sub. for" words on the *old* side?) would catch it; `repo.before_after` already knows both sides.
+- **Amendment direction (fixed in v8, measured by `amendment_direction`).** Up to v7 the model
+  read `Sub. for "X"` as "substituted with X" and stated substitutions backwards (v6 0/3, oracle
+  2/6 on dev substitutions; v8 7/7). The metric covers only the 13 questions whose endnote quotes
+  the replaced words, and abstains when an answer does not quote both wordings (small n).
+- **Background jobs die with the Claude Code session** that started them (`run_in_background`),
+  including the dev servers. Long Groq queues (`scripts/final_runs.sh`) are now launched detached
+  with `Start-Process` instead (see Next steps step 0); they resume from the cache.
+- **The v7 checker misses wrong effective dates** (0/4 in the mutation test) and backwards
+  substitutions; it only reliably catches wrong rates/amounts (6/6).
+- **The `gh` token lacks the `workflow` scope** (has gist, read:org, repo), so pushes that touch
+  `.github/workflows/` are rejected until `gh auth refresh -h github.com -s workflow`.
 - **v6's scope prompt and one-provision definitions rule were revised after reading dev
   results** (dev scope P/R 1.00/1.00 is tuned); the frozen test split is the honest check.
 - **LangGraph resolves `State` type hints at runtime,** so names in `agent/graph.py`'s `State`

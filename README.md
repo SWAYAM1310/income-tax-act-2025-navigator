@@ -48,8 +48,10 @@ What the ladder shows:
   not just what is retrieved: a scope check refuses out-of-scope questions before retrieval,
   the defining clause of a term goes first, and endnotes say in words what changed and where.
 - **Negative results are kept.** v7's claim checker found nothing to fix and its citations were
-  worse than the answer model's, so it ships as a retry gate only, at +83% tokens.
-  `evals/verifier_check.py` measures whether it catches corrupted answers.
+  worse than the answer model's, so it ships as a retry gate only, at +83% tokens. A mutation
+  test (`evals/verifier_check.py`) shows what the gate is worth: it flagged 6 of 6 answers with a
+  corrupted rate or amount and 0 of 4 with a corrupted effective date, with no false flags on
+  the originals (catch rate 0.60). It also passed the answers that state an amendment backwards.
 - **A metric gap found by looking at answers.** The frontend's Before / Now view showed answers
   stating amendments backwards, which `amendment_type` (a keyword check) cannot see. The Act's
   `Sub. for "60%"` means 60% is the *old* wording, and the model read it the other way. A new
@@ -70,7 +72,23 @@ Honest caveats (more in [`results/ladder.md`](results/ladder.md#caveats)):
 
 ### Final numbers on the frozen test split
 
-*Pending (Phase 11).* The test split runs once, at the end, for the versions in the table.
+84 questions, frozen by checksum before any tuning and run once at the end. Retrieval only:
+end-to-end test runs (about a week of Groq's free tier) were not done, so the answer-quality
+numbers above stay the dev_mini ones.
+
+| test (n = 84) | Top-5 recall | MRR | Right passage first | Amendment top-5 | Multi-step top-5 |
+|---|---|---|---|---|---|
+| v0 | 0.493 | 0.403 | 0.324 | 0.067 | 0.423 |
+| v2 | 0.640 | 0.586 | 0.515 | 0.067 | 0.423 |
+| v3 | 0.904 | 0.849 | 0.779 | 1.000 | 0.654 |
+| v5 | 0.912 | 0.850 | 0.779 | 1.000 | 0.692 |
+| **v6 / v8** | **0.912** | **0.868** | **0.809** | **1.000** | 0.692 |
+
+The two big steps (structural chunks, exact provision lookup) hold on unseen questions; the
+steps tuned on dev shrink, as expected (v5's multi-step gain is +0.04 on test against +0.17 on
+dev). The out-of-scope check, 1.00 / 1.00 on dev, refuses no answerable test question and
+catches 14 of 16 out-of-scope ones. All versions in
+[`results/ladder.md`](results/ladder.md#final-numbers-frozen-test-split-n--84-retrieval-only).
 
 ## How it works
 

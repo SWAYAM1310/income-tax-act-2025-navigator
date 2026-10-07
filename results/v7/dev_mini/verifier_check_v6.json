@@ -1,0 +1,145 @@
+{
+  "summary": {
+    "version": "v6",
+    "split": "dev_mini",
+    "n": 10,
+    "catch_rate": 0.6,
+    "false_flag_rate": 0.0,
+    "checker_errors": 0,
+    "tokens": 60519
+  },
+  "items": [
+    {
+      "id": "lookup-3b8b0654",
+      "type": "lookup",
+      "answer": "A deduction of an amount equal to 30% of the additional employee cost incurred in the course of such business in the tax year is allowed.",
+      "mutated": "A deduction of an amount equal to 91% of the additional employee cost incurred in the course of such business in the tax year is allowed.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": true,
+      "mutated_error": null,
+      "mutated_unsupported": [
+        "A deduction of an amount equal to 91% of the additional employee cost incurred in the course of such business in the tax year is allowed."
+      ],
+      "tokens": 4935
+    },
+    {
+      "id": "table-a236e688",
+      "type": "table",
+      "answer": "The TDS rate is 2 % and the threshold limit is three crore rupees when the recipient is a co‑operative society, or one crore rupee when the recipient is any other person.",
+      "mutated": "The TDS rate is 7 % and the threshold limit is three crore rupees when the recipient is a co‑operative society, or one crore rupee when the recipient is any other person.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": true,
+      "mutated_error": null,
+      "mutated_unsupported": [
+        "The TDS rate is 7 % and the threshold limit is three crore rupees when the recipient is a co‑operative society, or one crore rupee when the recipient is any other person."
+      ],
+      "tokens": 6854
+    },
+    {
+      "id": "table-2e663b9b",
+      "type": "table",
+      "answer": "The TDS rate is 1% of the higher of the consideration or the stamp‑duty value, and it applies only when the amount is at least ₹50 lakh (as per Note 3).",
+      "mutated": "The TDS rate is 4% of the higher of the consideration or the stamp‑duty value, and it applies only when the amount is at least ₹50 lakh (as per Note 3).",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": true,
+      "mutated_error": null,
+      "mutated_unsupported": [
+        "The TDS rate is 4% of the higher of the consideration or the stamp‑duty value, and it applies only when the amount is at least ₹50 lakh (as per Note 3)."
+      ],
+      "tokens": 5034
+    },
+    {
+      "id": "table-ed93e949",
+      "type": "table",
+      "answer": "The tax‑collection‑at‑source rate under section 394 for a remittance under the Liberalised Remittance Scheme exceeding ten lakh rupees is (a) 2 % when the amount is for education or medical treatment, and (b) 20 % for any other purpose.",
+      "mutated": "The tax‑collection‑at‑source rate under section 394 for a remittance under the Liberalised Remittance Scheme exceeding ten lakh rupees is (a) 7 % when the amount is for education or medical treatment, and (b) 20 % for any other purpose.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": true,
+      "mutated_error": null,
+      "mutated_unsupported": [
+        "The tax‑collection‑at‑source rate under section 394 for a remittance under the Liberalised Remittance Scheme exceeding ten lakh rupees is (a) 7 % when the amount is for education or medical treatment, and (b) 20 % for any other purpose."
+      ],
+      "tokens": 9287
+    },
+    {
+      "id": "table-a8fea698",
+      "type": "table",
+      "answer": "The TDS rate is the applicable “Rates in force” and the threshold limit is Rs 1,00,000 for a senior citizen and Rs 50,000 for a person other than a senior citizen.",
+      "mutated": "The TDS rate is the applicable “Rates in force” and the threshold limit is Rs 300001 for a senior citizen and Rs 50,000 for a person other than a senior citizen.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": true,
+      "mutated_error": null,
+      "mutated_unsupported": [
+        "The TDS rate is the applicable “Rates in force” and the threshold limit is Rs 300001 for a senior citizen and Rs 50,000 for a person other than a senior citizen."
+      ],
+      "tokens": 6346
+    },
+    {
+      "id": "amendment-085c86df",
+      "type": "amendment",
+      "answer": "Section 232(17) was inserted by the Finance Act 2026 (Act No. 4 of 2026) and came into force on 1‑April‑2026.",
+      "mutated": "Section 232(17) was inserted by the Finance Act 2026 (Act No. 4 of 2026) and came into force on 4‑April‑2026.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": false,
+      "mutated_error": null,
+      "mutated_unsupported": [],
+      "tokens": 4087
+    },
+    {
+      "id": "amendment-1de9b7c7",
+      "type": "amendment",
+      "answer": "The Finance Act, 2026 inserted clause (i) – ‘the updated return is a return of loss for the said tax year [except in a case referred to in sub‑section (6)(b)(i)]’ – into section 263(6)(c) of the Act, effective 1‑April‑2026.",
+      "mutated": "The Finance Act, 2026 inserted clause (i) – ‘the updated return is a return of loss for the said tax year [except in a case referred to in sub‑section (6)(b)(i)]’ – into section 263(6)(c) of the Act, effective 4‑April‑2026.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": false,
+      "mutated_error": null,
+      "mutated_unsupported": [],
+      "tokens": 6807
+    },
+    {
+      "id": "amendment-4b0c8884",
+      "type": "amendment",
+      "answer": "The Finance Act, 2026 substituted the reference in section 99(2) from “sub‑section (1)(a)(ii) or (b)” to “sub‑section (1)(a)(i) or (b)”, effective 1‑April‑2026.",
+      "mutated": "The Finance Act, 2026 substituted the reference in section 99(2) from “sub‑section (1)(a)(ii) or (b)” to “sub‑section (1)(a)(i) or (b)”, effective 4‑April‑2026.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": false,
+      "mutated_error": null,
+      "mutated_unsupported": [],
+      "tokens": 6150
+    },
+    {
+      "id": "amendment-69f06747",
+      "type": "amendment",
+      "answer": "Paragraph 4(3) of Schedule XIV was newly inserted by the Finance Act 2026 (Act No. 4 of 2026) with effect from 1‑April‑2026.",
+      "mutated": "Paragraph 4(3) of Schedule XIV was newly inserted by the Finance Act 2026 (Act No. 4 of 2026) with effect from 4‑April‑2026.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": false,
+      "mutated_error": null,
+      "mutated_unsupported": [],
+      "tokens": 6639
+    },
+    {
+      "id": "amendment-27f49307",
+      "type": "amendment",
+      "answer": "The Finance Act, 2026 substituted the rate in section 195(1)(i) – the rate of tax was changed from “30%” to “60%” effective 1‑April‑2026.",
+      "mutated": "The Finance Act, 2026 substituted the rate in section 195(1)(i) – the rate of tax was changed from “91%” to “60%” effective 1‑April‑2026.",
+      "orig_flagged": false,
+      "orig_error": null,
+      "mutated_flagged": true,
+      "mutated_error": null,
+      "mutated_unsupported": [
+        "The Finance Act, 2026 substituted the rate in section 195(1)(i) – the rate of tax was changed from “91%” to “60%” effective 1‑April‑2026."
+      ],
+      "tokens": 4380
+    }
+  ]
+}

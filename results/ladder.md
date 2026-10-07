@@ -326,10 +326,31 @@ that support each, across *all* the evidence; a claim with no support sends the 
 - **Whether the gate is worth that cost depends on whether it catches wrong answers**, which
   dev_mini cannot show (v6 left none with an ungrounded number). `python -m evals.verifier_check`
   measures it directly: it corrupts one quantity in each correct v6 answer (30% → 91%, Rs
-  1,00,000 → Rs 300001, 1-April → 4-April) and asks the checker about both versions. Result:
-  *pending (scheduled after the 2026-10-07 quota reset)*.
+  1,00,000 → Rs 300001, 1-April → 4-April) and asks the checker about both versions
+  (`results/v7/dev_mini/verifier_check_v6.json`, run 2026-10-07):
+
+  | dev_mini, v6 answers (n = 10) | Corrupted answer flagged | Original answer flagged |
+  |---|---|---|
+  | rate or amount changed (30% → 91%, 2% → 7%, Rs 1,00,000 → Rs 300001; n = 6) | **6 of 6** | 0 of 6 |
+  | effective date changed (1-April-2026 → 4-April-2026; n = 4) | **0 of 4** | 0 of 4 |
+  | **all** | **catch rate 0.60** | **false-flag rate 0.00** |
+
+  - **The gate catches wrong numbers and misses wrong dates.** All four misses are amendment
+    answers whose only quantity is the effective date. The evidence states it as
+    `w.e.f. 1-4-2026` and the answer as "1-April-2026"; the likely reason (not probed) is that the
+    20b checker does not convert between the two formats, so "4-April-2026" looks close enough to
+    "1-4-2026". A deterministic date check
+    (normalise `d-m-yyyy` and month names, then compare) would close this more cheaply than the
+    LLM.
+  - **It cannot see direction either.** Two of the "correct" originals state their substitution
+    backwards (s99(2) and s195(1)(i), the v6 errors v8 fixes), and the checker passed both: the
+    same words appear in the evidence, only their roles are swapped.
+  - So v7 stays a gate and is not the shipped version: v8 fixes the direction errors at no extra
+    cost, and the checker's one demonstrated catch (a corrupted rate or amount) is a case where
+    v6-v8 have scored grounded numbers 1.000 on dev_mini anyway.
+  - Cost: 30,293 gpt-oss-20b tokens (the 10 original-answer checks were cached).
 - Cost of the phase: 52,425 gpt-oss-20b tokens (the re-run as a gate replayed every check from
-  cache); 0 gpt-oss-120b.
+  cache) + 30,293 for the mutation test; 0 gpt-oss-120b.
 
 ## Phase 11: v8 (explicit before/after wording in the endnotes)
 
@@ -366,6 +387,39 @@ words from the bracket the endnote tags in the provision) and `inserted (not in 
   fact that is only a change type now accepts the `amendment_type` stems; every version was
   rescored from cache (this moved v3 0.562 → 0.604 and v4 0.708 → 0.771).
 - Cost: ~66K gpt-oss-120b tokens on 2026-10-06 for the substitution runs (v6, v8, oracle) and v8's dev_mini answers.
+
+## Final numbers: frozen test split (n = 84, retrieval only)
+
+The test split was frozen by checksum in Phase 3 and run once, at the end, with `--final`
+(which verifies `test.ids` against `test.sha256`). **Only retrieval was run on test.** The planned
+end-to-end runs (~1M gpt-oss-120b tokens, ~5-6 days of Groq's free tier) were stopped on
+2026-10-07 by user decision; end-to-end numbers remain the dev_mini ones above.
+
+| test (n = 84) | recall@5 | MRR | hit@1 | lookup | table | multi-hop | amendment | scope P / R |
+|---|---|---|---|---|---|---|---|---|
+| v0 | 0.493 | 0.403 | 0.324 | 0.526 | 0.810 | 0.423 | 0.067 | — |
+| v1 | 0.507 | 0.413 | 0.338 | 0.579 | 0.762 | 0.500 | 0.067 | — |
+| v2 | 0.640 | 0.586 | 0.515 | 0.895 | 0.952 | 0.423 | 0.067 | — |
+| v3 | 0.904 | 0.849 | 0.779 | 0.947 | 0.952 | 0.654 | 1.000 | — |
+| v4 | 0.904 | 0.849 | 0.779 | 0.947 | 0.952 | 0.654 | 1.000 | — |
+| v5 | 0.912 | 0.850 | 0.779 | 1.000 | 0.905 | 0.692 | 1.000 | — |
+| **v6 / v8** | **0.912** | **0.868** | **0.809** | 1.000 | 0.905 | 0.692 | 1.000 | 1.00 / 0.88 |
+
+Per-type columns are recall@5 (lookup 19, table 21, multi-hop 13, amendment 15, refusal 16
+questions). v4 and v8 change only the evidence text, not what is retrieved, so they equal v3 and
+v6. Dev for comparison: v6 0.940 / 0.913 / 0.871.
+
+- **The ladder's shape holds on unseen questions.** Structure (v2, +0.13 recall@5) and exact
+  provision lookup (v3, +0.26; amendment 0.07 → 1.00) are the two big steps on test as on dev;
+  cleaning (v1) is again noise.
+- **The dev-tuned steps shrink, as predicted.** v5's cross-reference expansion gains +0.04
+  multi-hop on test (+0.17 on dev) and costs one table question (0.952 → 0.905). v6's
+  definitions tool and ranking lift MRR 0.850 → 0.868 and hit@1 0.779 → 0.809, smaller than on
+  dev (0.882 → 0.913).
+- **The scope check, tuned on dev to 1.00/1.00, is 1.00 / 0.875 on test**: it refused no
+  answerable question, and let 2 of 16 out-of-scope questions through to retrieval (where the
+  answer model can still refuse; that path was not measured on test).
+- Multi-hop remains the weakest type (recall@5 0.69).
 
 ### Caveats
 
