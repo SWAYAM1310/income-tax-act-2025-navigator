@@ -1,7 +1,5 @@
 # Income-tax Act, 2025 navigator
 
-[![ci](https://github.com/SWAYAM1310/income-tax-act-2025-navigator/actions/workflows/ci.yml/badge.svg)](https://github.com/SWAYAM1310/income-tax-act-2025-navigator/actions/workflows/ci.yml)
-
 Ask a question about India's **Income-tax Act, 2025, as amended by the Finance Act, 2026**, and
 get an answer that quotes the Act and cites the exact provisions it relies on. It handles
 definitions, the rate tables (TDS/TCS under sections 393 and 394), the 2026 amendments, and
@@ -191,4 +189,4 @@ Every LLM reply and embedding is cached (`.cache/`), so re-running an eval costs
 
 Groq (`openai/gpt-oss-120b` answers, `openai/gpt-oss-20b` scope check and verifier) · Jina
 `jina-embeddings-v5-text-small` · Postgres 16 + pgvector · LangGraph · FastAPI · MCP Python SDK
-· React 19 + Vite · Playwright · GitHub Actions. Everything runs on free tiers.
+· React 19 + Vite · Playwright. Everything runs on free tiers.

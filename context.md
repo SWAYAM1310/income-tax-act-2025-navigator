@@ -1,8 +1,8 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-07. **Phases 0-11 DONE** except pushing CI (needs the `workflow` token scope). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (56d35af) except `.github/workflows/ci.yml`; the index dump is published as release `index-2026-10-06`. Remaining: pushing CI. Update this file at the end of every session or phase._
+_Last updated: 2026-10-07. **Phases 0-11 DONE.** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (4eb68dc + README CI cleanup); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
 
-> **Resume here:** "Next steps" step 2 (CI), then the optional steps. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, all pushed. Only `.github/workflows/ci.yml` is local and untracked (needs the `workflow` token scope).
+> **Resume here:** the project is complete; only optional Next steps remain. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, Phase 11 final 4eb68dc, all pushed. `.github/workflows/ci.yml` is local and untracked on purpose (CI skipped).
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -236,7 +236,7 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     `tasks.py check` once the API/MCP tests kept a connection open). `connect(autocommit=True)`
     is now used by `Answerer` and the API.
   - 136 offline tests pass (`tasks.py check`, which now also lints `scripts/`).
-- **Phase 11, CI + packaging + final numbers + README — DONE (2026-10-07) except pushing CI.**
+- **Phase 11, CI + packaging + final numbers + README — DONE (2026-10-07). CI skipped (user decision).**
   - **v8 (new ladder step).** `amendment_direction` metric (`evals/metrics.py`; for the 13
     amendment questions whose endnote quotes the replaced words, reads "from X to Y" / "X replaced
     by Y" / "Y substituted for X"; abstains otherwise) showed answers stating substitutions
@@ -390,15 +390,11 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 1. ~~v7 mutation test~~ DONE 2026-10-07 (catch 0.60, false flags 0.00; see Phase 8 status).
    Possible follow-up: a deterministic effective-date check (normalise `1-4-2026` /
    "1 April 2026" and compare) would catch the 4 date corruptions the 20b checker missed.
-2. **Phase 11 leftovers:**
-   - **CI:** `.github/workflows/ci.yml` needs the `gh` token's `workflow` scope. The user said
-     (2026-10-07) they ran `gh auth refresh -h github.com -s workflow`, but `gh auth status`
-     still showed gist/read:org/repo only. Once it shows `workflow`, commit + push ci.yml (the
-     user has authorized pushing it) and check the first GitHub Actions run (`gh run list`).
-     Verified locally in a fresh clone already.
-   - Optional: a CI retrieval eval now that the dump is published (download the release asset in
-     the job, restore into a pgvector service container, commit the 30 dev query embeddings so
-     no Jina key is needed).
+2. ~~CI~~ **SKIPPED (user decision, 2026-10-07).** The README's CI badge and "GitHub Actions"
+   stack entry were removed. `.github/workflows/ci.yml` (verified in a fresh clone) stays local
+   and untracked; pushing it later needs the `gh` token's `workflow` scope
+   (`gh auth refresh -h github.com -s workflow`) and the badge put back. Don't do this unless the
+   user asks.
 3. Consider a prompt step that makes table answers report **every** field of a cited row: the
    model retrieves the right row and faithfully reports the rate but drops the threshold
    (e.g. the Rs. 20,000 on `s393:tbl1#1(i)`, seen in the chat). Lower priority now: after the
@@ -423,7 +419,8 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 - **The v7 checker misses wrong effective dates** (0/4 in the mutation test) and backwards
   substitutions; it only reliably catches wrong rates/amounts (6/6).
 - **The `gh` token lacks the `workflow` scope** (has gist, read:org, repo), so pushes that touch
-  `.github/workflows/` are rejected until `gh auth refresh -h github.com -s workflow`.
+  `.github/workflows/` are rejected until `gh auth refresh -h github.com -s workflow` (moot while
+  CI is skipped).
 - **v6's scope prompt and one-provision definitions rule were revised after reading dev
   results** (dev scope P/R 1.00/1.00 is tuned); the frozen test split is the honest check.
 - **LangGraph resolves `State` type hints at runtime,** so names in `agent/graph.py`'s `State`
