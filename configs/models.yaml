@@ -11,6 +11,8 @@ providers:
 
 roles:
   answer:   {provider: groq, model: openai/gpt-oss-120b, max_tokens: 1500, reasoning_effort: low}
+  # v9's explained answers: about three times longer, and more reasoning to read the limits right
+  answer_explained: {provider: groq, model: openai/gpt-oss-120b, max_tokens: 2400, reasoning_effort: medium}
   classify: {provider: groq, model: openai/gpt-oss-20b,  max_tokens: 400,  reasoning_effort: low}
   verify:   {provider: groq, model: openai/gpt-oss-20b,  max_tokens: 800,  reasoning_effort: low}
 

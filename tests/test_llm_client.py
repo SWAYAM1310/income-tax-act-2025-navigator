@@ -3,7 +3,7 @@ import json
 import httpx
 import pytest
 
-from statnav.llm.client import ChatClient, QuotaExhausted
+from statnav.llm.client import ChatClient, QuotaExhausted, _Window
 
 
 def handler_factory(calls):
@@ -83,3 +83,9 @@ def test_chat_stream_reports_the_daily_limit(tmp_path):
     with pytest.raises(QuotaExhausted, match="retry after 900s"):
         llm.chat_stream([{"role": "user", "content": "x"}], lambda _: None)
     assert len(calls) == 1
+
+
+def test_a_call_larger_than_the_minute_window_is_let_through_when_it_is_empty():
+    w = _Window(rpm=30, tpm=100)
+    w.wait(500)  # used to sleep on an empty deque and raise IndexError
+    assert [n for _, n in w.events] == [500]

@@ -23,6 +23,7 @@ def events(body: str) -> list[tuple[str, object]]:
 class FakeBot:
     def __init__(self, agent):
         self.agent = agent
+        self.cfg = agent.cfg
 
 
 @pytest.fixture
@@ -31,16 +32,16 @@ def hits(monkeypatch):
     monkeypatch.setattr(agent_graph, "retrieve", lambda *a, **k: found)
 
 
-def client_with(answer_llm, classify_llm) -> TestClient:
+def client_with(answer_llm, classify_llm, cfg=CFG) -> TestClient:
     def make(version):
-        return FakeBot(agent_graph.Agent(None, None, CFG, answer_llm, classify_llm))
+        return FakeBot(agent_graph.Agent(None, None, cfg, answer_llm, classify_llm))
     return TestClient(create_app(Services(answerer=make, connect=lambda: None)))
 
 
 def test_health():
     r = client_with(FakeLLM(), FakeLLM()).get("/health")
-    assert r.status_code == 200 and r.json()["default_version"] == "v8"
-    assert "v8" in r.json()["versions"] and "oracle" not in r.json()["versions"]
+    assert r.status_code == 200 and r.json()["default_version"] == "v9"
+    assert "v9" in r.json()["versions"] and "oracle" not in r.json()["versions"]
 
 
 def test_query_streams_steps_evidence_and_a_cited_answer(hits):
@@ -65,6 +66,18 @@ def test_query_streams_steps_evidence_and_a_cited_answer(hits):
     assert ans["answer"] == "Section 1 says X." and not ans["refused"]
     assert ans["citations"] == [{"chunk_id": "v2:s1", "provisions": ["s1"], "page_start": 4,
                                  "page_end": 4}]
+
+
+def test_explained_answer_cites_inline_markers_and_suggests_follow_ups(hits):
+    cfg = {**CFG, "generation": {"prompt": "explained", "role": "answer_explained"}}
+    answer = FakeLLM(json.dumps({"answer": "### In short\nSection 1 says X [C1].",
+                                 "citations": [], "follow_ups": ["What is Y?", 7],
+                                 "refused": False}))
+    r = client_with(answer, FakeLLM('{"in_scope": true}'), cfg).post(
+        "/query", json={"question": "What does section 1 say?"})
+    ans = dict(events(r.text))["answer"]
+    assert [c["chunk_id"] for c in ans["citations"]] == ["v2:s1"]  # from the [C1] marker alone
+    assert ans["follow_ups"] == ["What is Y?"]
 
 
 def test_the_eval_path_never_streams(hits):
@@ -111,7 +124,7 @@ def test_quota_exhaustion_is_an_error_event_not_an_answer(hits):
     assert ev["answer"]["error"] and not ev["answer"]["refused"]
 
 
-@pytest.mark.parametrize("body", [{"question": "hi"}, {"question": "What is X?", "version": "v9"},
+@pytest.mark.parametrize("body", [{"question": "hi"}, {"question": "What is X?", "version": "v99"},
                                   {"question": "What is X?", "k": 0}])
 def test_query_validates_its_input(body):
     assert client_with(FakeLLM(), FakeLLM()).post("/query", json=body).status_code == 422

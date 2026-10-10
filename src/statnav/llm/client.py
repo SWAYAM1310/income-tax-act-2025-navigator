@@ -127,7 +127,10 @@ class _Window:
             now = time.monotonic()
             while self.events and now - self.events[0][0] > 60:
                 self.events.popleft()
-            if len(self.events) < self.rpm and sum(t for _, t in self.events) + n <= self.tpm:
+            # an empty window lets any call through: one larger than the whole window cannot
+            # wait its way under it
+            if not self.events or (len(self.events) < self.rpm
+                                   and sum(t for _, t in self.events) + n <= self.tpm):
                 self.events.append((now, n))
                 return
             time.sleep(max(1.0, 61 - (now - self.events[0][0])))

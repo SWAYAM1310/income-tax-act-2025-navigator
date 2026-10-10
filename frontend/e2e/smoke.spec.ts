@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 
 // Captured from the real API (python -m statnav.api) so the UI is tested on real payloads;
-// query-cut-off.sse is query-s99-2.sse stopped after eight `token` events.
+// query-cut-off.sse is query-s99-2.sse stopped after eight `token` events. The v9 (explained answer)
+// fixtures: query-v9-s99-2.sse, and query-v9-cut-off.sse stopped after 120 `token` events.
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
 
 async function mockApi(page: Page) {
@@ -13,7 +14,8 @@ async function mockApi(page: Page) {
         body: JSON.stringify({ detail: 'Question limit reached (10 an hour). Try again in about 30 min.' }) })
       return
     }
-    const body = q.includes('refund') ? fixture('query-refusal.sse')
+    const body = q.includes('Explain') ? fixture(q.includes('half') ? 'query-v9-cut-off.sse' : 'query-v9-s99-2.sse')
+      : q.includes('refund') ? fixture('query-refusal.sse')
       : q.includes('"transfer"') ? fixture('query-cut-off.sse') : fixture('query-s99-2.sse')
     await route.fulfill({ status: 200, contentType: 'text/event-stream', body })
   })
@@ -84,6 +86,42 @@ test.describe('chat', () => {
   test('shows the streamed text when the stream stops before the answer', async ({ page }) => {
     await page.getByRole('button', { name: /meaning of "transfer"/ }).click()
     await expect(page.getByText('Section 99(2) was amended by substituting the reference')).toBeVisible()
+    await expect(page.getByText('Stopped before the answer was finished.')).toBeVisible()
+  })
+
+  test('lays an explained answer out in sections with § marks and follow-ups', async ({ page }) => {
+    const ask = async (q: string) => {
+      await page.getByRole('textbox', { name: 'Ask about the Act' }).fill(q)
+      await page.keyboard.press('Enter')
+    }
+    await ask('Explain how section 99(2) was amended')
+    const answer = page.getByRole('article', { name: /Explain how section 99\(2\)/ })
+    for (const h of ['In short', 'What this means for you', 'What changed', 'Watch out', 'Example']) {
+      await expect(answer.getByRole('heading', { name: h, exact: true })).toBeVisible()
+    }
+    await expect(answer.getByText(/^Suppose you transferred an asset/)).toBeVisible()
+    await expect(answer.getByText('[C1]')).toHaveCount(0)  // markers render as § marks
+    await expect(answer.getByRole('heading', { name: /Follow/ })).toHaveCount(0)
+
+    // a § mark opens the provision it cites
+    const sheet = page.getByRole('complementary', { name: 'Provision' })
+    await answer.getByRole('button', { name: 'Open s. 99(2)' }).first().click()
+    await expect(sheet.getByRole('heading', { name: 'Section 99(2)' })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    // a follow-up asks itself
+    const next = answer.getByRole('list', { name: 'Suggested follow-up questions' }).getByRole('button')
+    await expect(next).toHaveCount(3)
+    await next.first().click()
+    await expect(page.getByRole('article', { name: /Which assets fall under/ })).toBeVisible()
+  })
+
+  test('renders a half-streamed explained answer', async ({ page }) => {
+    await page.getByRole('textbox', { name: 'Ask about the Act' }).fill('Explain half of section 99(2)')
+    await page.keyboard.press('Enter')
+    const answer = page.getByRole('article', { name: /Explain half/ })
+    await expect(answer.getByRole('heading', { name: 'What changed', exact: true })).toBeVisible()
+    await expect(answer.getByRole('heading', { name: 'Watch out', exact: true })).toBeVisible()
     await expect(page.getByText('Stopped before the answer was finished.')).toBeVisible()
   })
 

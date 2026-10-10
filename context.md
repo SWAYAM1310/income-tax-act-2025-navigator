@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-07. **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) built, tested locally and pushed; the Railway/Vercel projects are not created yet (Next steps 8).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
+_Last updated: 2026-10-10. **Phase 14 (v9, plain-English explained answers) DONE, uncommitted and not deployed** (dev_mini fact recall 0.917, cite P/R 0.868/0.958, everything else = v8; see Phase 14). Earlier: **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) LIVE at https://income-tax-act-2025-navigator.vercel.app (API https://income-tax-act-2025-navigator-production.up.railway.app).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
 
 > **Resume here:** the project is complete; only optional Next steps remain. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, Phase 11 final 4eb68dc, all pushed. `.github/workflows/ci.yml` is local and untracked on purpose (CI skipped).
 
@@ -321,8 +321,15 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - Playwright: 14/14 on desktop + phone (welcome, citation sheet, a cut-off stream, refusal,
       history across a reload with rename/delete/Ctrl+K, ladder).
     - oxlint and the build are clean. Screenshots were reviewed.
-- **Phase 13, free deployment (Railway API + Vercel UI) — BUILT and tested locally (2026-10-07,
-  pushed; Railway/Vercel projects not created yet).** The user chose Vercel + Railway; the plan is at
+- **Phase 13, free deployment (Railway API + Vercel UI) — LIVE (2026-10-07, 8d336db).**
+  UI https://income-tax-act-2025-navigator.vercel.app; API
+  https://income-tax-act-2025-navigator-production.up.railway.app (Serverless on,
+  `PORT=8000`, volume at `/app/.cache`).
+  - Live check: health ok, the DB served s393, and CORS allows the Vercel origin. One
+    s99(2) question streamed (71 tokens), cited `v2:s99(2)`, and used 3,029 Groq tokens.
+  - Vercel gotcha: a `VITE_` variable must be type **Config** (Secret is refused for public
+    prefixes, and a saved Secret cannot be changed). Vite bakes it in at build time, so
+    changing it needs a redeploy without the build cache. The user chose Vercel + Railway; the plan is at
   `C:\Users\ASUS\.claude\plans\okay-so-now-i-delegated-quiche.md`.
   - Railway's free plan gives $1 of credit a month and 0.5 GB RAM per service, so everything
     runs in **one sleeping service**: `deploy/railway.Dockerfile` (pgvector base, uv, index dump
@@ -343,6 +350,32 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - RAM 83 MB idle, 183 MB after an answer.
 
     `tasks.py check`: 160 passed. Playwright 16/16 (new: the 429 message).
+- **Phase 14, v9 explained answers — DONE (2026-10-10, uncommitted, not deployed).** Plan:
+  `C:\Users\ASUS\.claude\plans\you-can-see-this-polymorphic-crane.md`. The user wanted answers a
+  non-expert can understand (screenshot: In short / What this means / Conditions / Example) plus
+  Watch out, Key terms, follow-up questions, inline § citations, a layout per question type.
+  - v9 = v8 + `generation: {prompt: explained, role: answer_explained}`. `answer.py`:
+    `EXPLAINED_PROMPT` + `ROUTE_BLOCKS` (general/table/amendment/definition), `system_prompt()`
+    (basic = the old `SYSTEM_PROMPT`, so v0-v8 caches/scores are untouched), `answer_role()`,
+    `inline_cites()` ([Cn] markers in the text also cite), `follow_ups()`, `tidy()` (Key terms
+    kept only if a passage defines the term; a "Follow-ups" section moves to `follow_ups`).
+    `models.yaml` role `answer_explained`: gpt-oss-120b, medium reasoning, 2,400 max tokens.
+    Defaults (chat, API, MCP, UI ladder highlight) are now **v9**. API payload has `follow_ups`.
+  - UI: `AnswerText.tsx` renders the Markdown subset (headings, bullets, bold, Example callout),
+    [Cn] as clickable §126 marks (open the statute sheet), holds Key terms back while streaming;
+    `ChatView` "Ask next" follow-up buttons; copy/export resolve markers (`api.resolveMarkers`).
+  - `evals/metrics.py:stated_numbers` skips the Example section and [Cn] labels (no old answer
+    has either, so v0-v8 scores are unchanged).
+  - Bug fixed: `llm/client.py:_Window.wait` crashed (IndexError) when one call's estimate
+    exceeded the whole minute window.
+  - dev_mini (n = 30, complete): fact recall 0.875 -> **0.917**, exact 0.701 -> 0.736, cite rec.
+    0.896 -> **0.958**, cite prec. 0.958 -> **0.868** (cites table notes / sibling sub-sections not
+    in gold), grounded 1.000, table exact 1.000, amendment type 1.000, direction 1.000, refusal
+    1.00/1.00; LLM tok/q 2,532 -> 3,835. Written up in `results/ladder.md` (Phase 14), README.
+  - Exit check: `tasks.py check` 181 passed; Playwright 20/20 (new: sections + § marks +
+    follow-ups, half-streamed answer; fixtures `query-v9-*.sse` captured from the real API);
+    oxlint + build clean; screenshots reviewed.
+  - Groq 2026-10-10: ~173K gpt-oss-120b tokens (tuning + 2 dev_mini passes).
 - **Phase 10, Vite + React + TS frontend — DONE (2026-10-06, uncommitted).** `frontend/`
   (README there). Two views: *Ask the Act* (question → streamed agent steps → answer + citation
   chips; a citation opens the "statute sheet": marginal note = section heading, clause hierarchy,
@@ -447,6 +480,11 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 ## Next steps (in order)
 
+**Phase 14 follow-ups (v9):** ask the user before committing; then redeploy (Railway rebuild for
+the API + `models.yaml`, Vercel for the UI) only with their approval. Optional: a check on worked
+examples (e.g. recompute the arithmetic, or flag examples that contradict Watch out), and a dev
+end-to-end run of v9 (~138 x 3.8K tokens, 3 Groq days).
+
 **Everything below is free: Groq's free tier covers generation, and the rest is Postgres.**
 
 0. ~~Final test-split runs~~ STOPPED by the user 2026-10-07; retrieval-only test numbers are
@@ -472,17 +510,19 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 6. Optional: reword the templated table questions in **dev** that copy row text, since they
    inflate table scores. The test split is frozen, so it can't change.
 7. (done) Phase 12 committed as b261565.
-8. **Deploy (Phase 13)**:
-   - The user creates the Railway project from the repo, then:
-     - turns on Serverless;
-     - adds a volume at `/app/.cache`;
-     - sets `GROQ_API_KEY`, `JINA_API_KEY`, `STATNAV_RATE_LIMIT=10` and `STATNAV_CORS_ORIGINS`;
-     - generates a domain.
-   - Then a Vercel project with root `frontend` and `VITE_API_BASE=https://<railway domain>`.
-   - Then the live checks from the plan (health, one question, the 429, sleep/wake, the usage
-     page after a day).
+8. Deploy (Phase 13): **done**. Remaining live checks: the 429 from a browser, the
+   sleep/wake path, and Railway's usage page after a day (it must stay under $1/month).
 
 ## Known issues
+- **v9's worked examples can be wrong** (no metric checks them). On s126 the model sometimes adds
+  an "if you also paid ..." step that breaks a restriction it just stated, and reads s126(4)'s two
+  separate Rs. 50,000 caps ((2)(a)+(c) and (2)(b)+(d)) as one. Medium reasoning + prompt rules
+  reduced but did not remove this. High reasoning does not fit Groq's free 8K tokens/min (Groq
+  counts prompt + max_tokens).
+- **v9 costs ~50% more** (3.8K tokens/q): about 50 live questions/day on the free tier instead of
+  ~75. Each call reserves prompt + 2,400 against the 7,500/min window, so evals run ~1 q/min.
+- **`evals.run` holds a DB transaction open** (not autocommit), so running pytest during an eval
+  blocks the schema test until the eval ends.
 - **Free hosting can go down:** Railway's $1/month credit covers the service only while it sleeps
   between visits. Without a card it stops, rather than bills, if the credit runs out. The first
   visit after a sleep waits for the boot (the UI retries for up to 75 s). Jina query embeddings

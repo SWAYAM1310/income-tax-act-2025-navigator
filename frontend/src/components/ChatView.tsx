@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Step } from '../api'
-import { provisionFor, shortCite } from '../api'
+import { provisionFor, resolveMarkers, shortCite } from '../api'
 import { ask, stop, useLive } from '../ask'
 import type { Turn } from '../history'
 import { getChat, useChats } from '../history'
 import { ActStrip } from './ActMap'
+import { AnswerText } from './AnswerText'
 import type { ComposerHandle } from './Composer'
 import { Composer } from './Composer'
-import { Check, Copy, Loader } from './Icons'
+import { Check, Copy, Loader, Reply } from './Icons'
 import { StatuteSheet } from './StatuteSheet'
 
 // Questions from the eval set, verbatim (so their answers replay from cache), one per route.
@@ -91,7 +92,7 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
           <div className="mx-auto w-full max-w-[46rem] px-4 pt-8 pb-10 sm:px-6">
             {turns.length === 0 && <Empty onPick={(q) => onAsk(q)} />}
             {turns.map((t) => (
-              <TurnView key={t.id} t={t} open={open} setOpen={setOpen} />
+              <TurnView key={t.id} t={t} open={open} setOpen={setOpen} onAsk={busy ? null : onAsk} />
             ))}
           </div>
         </div>
@@ -139,7 +140,15 @@ function Empty({ onPick }: { onPick: (q: string) => void }) {
   )
 }
 
-function TurnView({ t, open, setOpen }: { t: Turn; open: Open | null; setOpen: (o: Open) => void }) {
+type TurnProps = {
+  t: Turn
+  open: Open | null
+  setOpen: (o: Open) => void
+  /** ask a follow-up; null while another answer is streaming in this chat */
+  onAsk: ((q: string) => void) | null
+}
+
+function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
   const lines = t.steps.map(describe).filter((x): x is string => !!x)
   const a = t.answer
   const streaming = t.status === 'streaming'
@@ -171,7 +180,9 @@ function TurnView({ t, open, setOpen }: { t: Turn; open: Open | null; setOpen: (
       {(text || refused) && !(failed && !text) && (
         <div className={`mt-5 ${refused ? 'border-l-2 border-refusal pl-4' : ''}`} aria-live="polite">
           {refused && <p className="m-0 mb-1.5 text-sm font-bold text-refusal">Not answered from the Act</p>}
-          <p className={`m-0 font-serif text-[1.12rem] leading-[1.7] whitespace-pre-wrap ${streaming ? 'caret' : ''}`}>{text}</p>
+          {refused
+            ? <p className="m-0 font-serif text-[1.12rem] leading-[1.7] whitespace-pre-wrap">{text}</p>
+            : <AnswerText text={text} evidence={t.evidence} streaming={streaming} open={open} onCite={setOpen} />}
         </div>
       )}
 
@@ -201,12 +212,29 @@ function TurnView({ t, open, setOpen }: { t: Turn; open: Open | null; setOpen: (
             <p className="mt-4 rounded-lg bg-refusal-tint px-3 py-2 text-sm text-refusal">The answer named no passage, so treat it as unsupported.</p>
           )}
 
+          {!refused && !!a.follow_ups?.length && (
+            <div className="mt-6">
+              <p className="m-0 mb-2 text-xs font-bold tracking-wide text-ink-soft uppercase">Ask next</p>
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0" aria-label="Suggested follow-up questions">
+                {a.follow_ups.map((q) => (
+                  <li key={q}>
+                    <button type="button" disabled={!onAsk} onClick={() => onAsk?.(q)}
+                      className="group flex w-full items-start gap-2 rounded-lg border border-line px-3 py-2 text-left font-serif text-[1rem] transition-colors hover:border-jade hover:text-jade disabled:pointer-events-none disabled:opacity-50">
+                      <Reply className="mt-1 size-3.5 shrink-0 text-jade-dim group-hover:text-jade" />
+                      <span>{q}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {!refused && t.evidence.length > 0 && (
             <ActStrip passages={t.evidence.map((p) => p.chunk_id)} cited={a.citations.map((c) => c.chunk_id)} />
           )}
 
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
-            {!refused && <CopyButton text={a.answer + (a.citations.length ? `\n\nCited: ${a.citations.map((c) => shortCite(provisionFor(c.chunk_id).row ?? provisionFor(c.chunk_id).id)).join('; ')}` : '')} />}
+            {!refused && <CopyButton text={resolveMarkers(a.answer, t.evidence) + (a.citations.length ? `\n\nCited: ${a.citations.map((c) => shortCite(provisionFor(c.chunk_id).row ?? provisionFor(c.chunk_id).id)).join('; ')}` : '')} />}
             <span>
               {refused && !a.evidence_tokens ? 'Refused before reading the Act'
                 : a.cached ? 'Answered from cache' : `${a.llm_tokens.toLocaleString()} answer tokens`}

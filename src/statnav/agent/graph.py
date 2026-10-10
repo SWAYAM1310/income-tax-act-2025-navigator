@@ -195,7 +195,9 @@ class Agent:
             def on_text(piece: str) -> None:
                 write({"text": piece, "attempt": attempt})
         try:
-            out, reply = generate(self.answer_llm, s["question"], s["evidence"], retry, on_text)
+            style = (self.cfg.get("generation") or {}).get("prompt", "basic")
+            out, reply = generate(self.answer_llm, s["question"], s["evidence"], retry, on_text,
+                                  style=style, route=s.get("route"))
         except QuotaExhausted:
             raise
         except LLMError as exc:

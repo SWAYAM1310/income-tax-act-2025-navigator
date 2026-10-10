@@ -6,6 +6,11 @@ definitions, the rate tables (TDS/TCS under sections 393 and 394), the 2026 amen
 questions that need two provisions linked by a cross-reference. It refuses questions the Act
 cannot answer (the Rules, forms, circulars, case law, the e-filing portal, personal advice).
 
+**Try it:** https://income-tax-act-2025-navigator.vercel.app. It runs on free tiers, so the
+first question after an idle spell waits a few seconds while the server wakes. Each visitor
+can ask 10 questions an hour. API docs:
+https://income-tax-act-2025-navigator-production.up.railway.app/docs.
+
 > **Not tax advice.** The system answers from the text of the Act only and can be wrong or
 > incomplete. Read the cited provision before relying on an answer.
 
@@ -29,7 +34,8 @@ retrieval on `dev` (138 questions).
 | v5 | one-hop cross-reference expansion | 0.923 | 0.792 | 0.917 | 0.833 | 0.83 / 0.83 | 2,444 |
 | v6 | LangGraph agent: scope check, definition lookup, structured endnotes | 0.940 | 0.875 | 0.958 | 1.000 | 1.00 / 1.00 | 2,531 |
 | v7 | v6 + an LLM claim checker (kept as a gate only) | — | 0.875 | 0.958 | 1.000 | 1.00 / 1.00 | 4,625 |
-| **v8** | **v6 + endnotes that state the wording before and after** | **0.940** | **0.875** | **0.958** | **1.000** | **1.00 / 1.00** | 2,532 |
+| v8 | v6 + endnotes that state the wording before and after | 0.940 | 0.875 | 0.958 | 1.000 | 1.00 / 1.00 | 2,532 |
+| **v9** | **v8 + plain-English answers: sections, a worked example, inline § citations** | **0.940** | **0.917** | 0.868 | **1.000** | **1.00 / 1.00** | 3,835 |
 | oracle | the gold provisions handed to the model (ceiling) | — | 0.833 | 1.000 | 0.667 | 1.00 / 0.83 | 920 |
 
 What the ladder shows:
@@ -55,7 +61,16 @@ What the ladder shows:
   `Sub. for "60%"` means 60% is the *old* wording, and the model read it the other way. A new
   `amendment_direction` metric scored v6 0 of 3 and the gold-passage oracle 2 of 6 on dev's
   quoted substitutions. v8 spells out `wording before / wording now` in the evidence: **7 of 7**,
-  at the same cost, with every other score unchanged. v8 is the version the app runs.
+  at the same cost, with every other score unchanged.
+- **Answers written for non-experts (v9).** v9 keeps v8's retrieval and evidence and changes only
+  how the answer is written: In short / What this means for you / a block for the question type
+  (conditions, the table row's numbers, what changed, or what a term includes) / Watch out / a
+  worked Example / Key terms, with a § mark on every sentence and suggested follow-up questions.
+  Facts found rose to 0.917 and citation recall to 0.958; citation precision fell to 0.868
+  because the answers also cite neighbouring passages (a table's notes, related sub-sections)
+  that the gold set does not list. It costs about 50% more tokens. Key terms are kept only when a
+  passage defines them, checked in code, because the model otherwise explains words from memory.
+  v9 is the version the app runs.
 
 Honest caveats (more in [`results/ladder.md`](results/ladder.md#caveats)):
 

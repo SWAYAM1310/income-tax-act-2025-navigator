@@ -2,7 +2,7 @@
 // sees earlier turns (each question is answered on its own).
 import { useSyncExternalStore } from 'react'
 import type { AnswerPayload, Passage, Step } from './api'
-import { shortCite, provisionFor } from './api'
+import { shortCite, provisionFor, resolveMarkers } from './api'
 
 export type TurnStatus = 'streaming' | 'done' | 'stopped' | 'error'
 
@@ -108,7 +108,9 @@ export const deleteAllChats = () => commit([], true)
 export function toMarkdown(c: Chat): string {
   const lines = [`# ${c.title}`, '', `_Exported ${new Date().toLocaleString()} from the Income-tax Act, 2025 navigator. Not tax advice._`, '']
   for (const t of c.turns) {
-    lines.push(`## ${t.question}`, '', t.answer?.answer ?? (t.text || t.error || '(no answer)'), '')
+    const text = t.answer ? resolveMarkers(t.answer.answer, t.evidence) : (t.text || t.error || '(no answer)')
+    // the answer's own "### " sections sit one level below the question
+    lines.push(`## ${t.question}`, '', text.replace(/^#{1,5} /gm, '### '), '')
     const cites = t.answer?.citations ?? []
     if (cites.length) {
       lines.push('Cited: ' + cites.map((x) => {
@@ -116,6 +118,7 @@ export function toMarkdown(c: Chat): string {
         return `${shortCite(p.row ?? p.id)}${x.page_start ? ` (p. ${x.page_start})` : ''}`
       }).join('; '), '')
     }
+    if (t.answer?.follow_ups?.length) lines.push('Ask next:', ...t.answer.follow_ups.map((q) => `- ${q}`), '')
   }
   return lines.join('\n')
 }

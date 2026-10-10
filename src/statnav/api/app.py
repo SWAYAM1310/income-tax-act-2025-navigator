@@ -34,10 +34,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from statnav import repo
-from statnav.answer import Answer, Answerer, failed, from_agent
+from statnav.answer import Answer, Answerer, failed, from_agent, inline_cites
 from statnav.config import CONFIG_DIR, ROOT
 
-DEFAULT_VERSION = "v8"
+DEFAULT_VERSION = "v9"
 #: versions a user can ask (the oracle needs gold provisions)
 VERSIONS = sorted(p.stem for p in (CONFIG_DIR / "versions").glob("v*.yaml"))
 RESULTS = ROOT / "results"
@@ -131,7 +131,7 @@ def answer_payload(res: Answer, version: str) -> dict:
     return {
         "question": res.question, "version": version, "answer": res.answer,
         "refused": res.refused, "error": res.error, "route": res.route,
-        "verified": res.verified, "unsupported": res.unsupported,
+        "verified": res.verified, "unsupported": res.unsupported, "follow_ups": res.follow_ups,
         "citations": [{"chunk_id": h["chunk_id"], "provisions": h.get("provisions", []),
                        "page_start": h.get("page_start"), "page_end": h.get("page_end")}
                       for h in res.cited],
@@ -176,7 +176,7 @@ def stream_answer(services: Services, q: QueryIn) -> Iterator[str]:
                     if node == "pack":
                         yield _sse("evidence", [_passage(h, n)
                                                 for n, h in enumerate(state["evidence"], 1)])
-                res = from_agent(bot.agent.result(q.question, state))
+                res = from_agent(bot.agent.result(q.question, state), inline_cites(bot.cfg))
             else:
                 res = bot.ask(q.question, q.k)
         except (QuotaExhausted, LLMError) as exc:

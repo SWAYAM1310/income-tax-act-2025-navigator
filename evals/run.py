@@ -29,7 +29,14 @@ from evals.common import (
     write_jsonl,
 )
 from evals.metrics import aggregate, generation_metrics, gold_targets, retrieval_metrics
-from statnav.answer import SYSTEM_PROMPT, pack, parse_citations, user_prompt
+from statnav.answer import (
+    SYSTEM_PROMPT,
+    answer_role,
+    inline_cites,
+    pack,
+    parse_citations,
+    user_prompt,
+)
 from statnav.config import CONFIG_DIR, load_yaml
 from statnav.embed import tokens
 from statnav.obs.logging import get_logger
@@ -106,7 +113,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
     llm = None
     if not retrieval_only:
         from statnav.llm.client import ChatClient
-        llm = ChatClient.for_role("answer")
+        llm = ChatClient.for_role(answer_role(cfg))
     agent = None
     if cfg.get("agent"):
         from statnav.agent.graph import Agent
@@ -162,7 +169,7 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
             if res.verified is not None or res.attempts > 1:
                 rec.update(verified=res.verified, attempts=res.attempts,
                            unsupported=res.unsupported, verify_tokens=res.verify_tokens)
-            cited = parse_citations(out, evidence)
+            cited = parse_citations(out, evidence, inline_cites(cfg))
             rec["answer"] = out.get("answer")
             rec["refused"] = bool(out.get("refused"))
             rec["cited"] = [h["chunk_id"] for h in cited]

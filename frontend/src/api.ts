@@ -81,6 +81,8 @@ export type AnswerPayload = {
   route: string | null
   verified: boolean | null
   citations: Citation[]
+  /** v9: suggested next questions (absent from older answers and saved chats) */
+  follow_ups?: string[]
   evidence_tokens: number
   llm_tokens: number
   classify_tokens: number
@@ -233,6 +235,24 @@ export function provisionFor(chunkId: string): { id: string; row?: string } {
 }
 
 /** "s2(109)" -> "s. 2(109)"; "sch:XIV:4(3)" -> "Sch. XIV, 4(3)"; "s393:tbl1" -> "s. 393, Table 1". */
+/** The compact mark an inline [Cn] citation shows in the answer text: §126, §393, Sch. XIV. */
+export function markLabel(id: string): string {
+  const sch = id.match(/^sch:([IVXL]+)/)
+  if (sch) return `Sch. ${sch[1]}`
+  const sec = id.match(/^s(\d+[A-Z]*)/)
+  return sec ? `§${sec[1]}` : shortCite(id)
+}
+
+/** Inline [Cn] markers as the provisions they point to, for copied and exported text. */
+export function resolveMarkers(text: string, evidence: Passage[]): string {
+  return text.replace(/ ?\[\s*C\s*(\d+)\s*\]/g, (_, n: string) => {
+    const p = evidence.find((e) => e.label === `C${n}`)
+    if (!p) return ''
+    const t = provisionFor(p.chunk_id)
+    return ` [${shortCite(t.row ?? t.id)}]`
+  })
+}
+
 export function shortCite(id: string): string {
   const table = id.match(/^s(\w+?):tbl(\d+)(?:#(.+))?$/)
   if (table) return `s. ${table[1]}, Table ${table[2]}${table[3] ? `, Sl. ${table[3]}` : ''}`

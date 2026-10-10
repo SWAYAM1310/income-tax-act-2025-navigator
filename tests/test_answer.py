@@ -2,7 +2,22 @@
 
 import json
 
-from statnav.answer import Answer, AnswerTextStream, pack, parse_citations, user_prompt
+import pytest
+
+from statnav.answer import (
+    ROUTE_BLOCKS,
+    SYSTEM_PROMPT,
+    Answer,
+    AnswerTextStream,
+    answer_role,
+    follow_ups,
+    inline_cites,
+    pack,
+    parse_citations,
+    system_prompt,
+    tidy,
+    user_prompt,
+)
 
 
 def hit(cid: str, tokens: int, **kw) -> dict:
@@ -85,3 +100,104 @@ def test_answer_text_stream_skips_other_keys_and_fences():
 def test_answer_text_stream_waits_for_an_answer_key():
     pieces, parser = _stream(["no json here", " at all"])
     assert pieces == ["", ""] and parser.text == "" and not parser.done
+
+
+# -- v9: explained answers ------------------------------------------------------------------
+def test_basic_style_is_the_measured_prompt():
+    # v0-v8's cached replies and committed scores depend on this exact text
+    assert system_prompt("basic") is SYSTEM_PROMPT
+    assert system_prompt("basic", "table") is SYSTEM_PROMPT
+
+
+@pytest.mark.parametrize("route", ["general", "table", "amendment", "definition"])
+def test_explained_prompt_carries_its_route_block_only(route):
+    p = system_prompt("explained", route)
+    assert ROUTE_BLOCKS[route] in p
+    assert all(b not in p for r, b in ROUTE_BLOCKS.items() if r != route)
+    for heading in ("### In short", "### What this means for you", "### Example",
+                    "### Watch out", "### Key terms"):
+        assert heading in p
+    assert '"follow_ups"' in p and "{" in p  # the JSON shape survives str.format
+
+
+def test_explained_prompt_defaults_to_the_general_block():
+    assert system_prompt("explained", None) == system_prompt("explained", "general")
+    assert system_prompt("explained", "refuse") == system_prompt("explained", "general")
+
+
+def test_unknown_style_is_an_error():
+    with pytest.raises(ValueError):
+        system_prompt("chatty")
+
+
+def test_answer_role_defaults_to_the_measured_one():
+    assert answer_role({}) == "answer"
+    v9 = {"generation": {"prompt": "explained", "role": "answer_explained"}}
+    assert answer_role(v9) == "answer_explained"
+
+
+def test_inline_cites_only_for_the_explained_style():
+    assert inline_cites({"generation": {"prompt": "explained"}})
+    assert not inline_cites({"generation": {"prompt": "basic"}})
+    assert not inline_cites({})
+
+
+def test_inline_markers_cite_in_order_without_duplicates():
+    ev = [hit("a", 10), hit("b", 10), hit("c", 10)]
+    out = {"answer": "Yes [ C3 ]. Limit Rs. 25,000 [C1][C3]. Junk [C9] [c2].",
+           "citations": ["C1"]}
+    assert [h["chunk_id"] for h in parse_citations(out, ev, inline=True)] == ["a", "c"]
+    # the basic style never reads the text, so the committed citation scores cannot move
+    assert [h["chunk_id"] for h in parse_citations(out, ev)] == ["a"]
+
+
+def test_follow_ups_keep_three_non_empty_strings():
+    out = {"follow_ups": [" Who is a senior citizen? ", "", 3, "a", "b", "c"]}
+    assert follow_ups(out) == ["Who is a senior citizen?", "a", "b"]
+    assert follow_ups({"follow_ups": "not a list"}) == []
+    assert follow_ups({}) == []
+
+
+def test_answer_text_stream_keeps_markdown_line_breaks():
+    text = "### In short\nYes [C1].\n\n- one\n- **two**"
+    reply = json.dumps({"answer": text, "citations": ["C1"]})
+    s = AnswerTextStream()
+    got = "".join(s.feed(reply[i:i + 5]) for i in range(0, len(reply), 5))
+    assert got == text
+
+
+def test_tidy_keeps_only_key_terms_a_passage_defines():
+    ev = [{"text": '(11) "senior citizen" means an individual resident in India of sixty years.'},
+          {"text": "Section 126 text."}]
+    answer = "\n".join(["### In short", "Yes [C1].",
+                        "### Key terms",
+                        "- **senior citizen**: an individual of sixty years [C1].",
+                        "- **sub-section (1)(a)(i)**: the old clause [C2].",
+                        "### Example", "Suppose ..."])
+    out = tidy({"answer": answer, "citations": ["C1"], "refused": False}, ev)
+    assert "**senior citizen**" in out["answer"] and "(1)(a)(i)" not in out["answer"]
+    assert out["answer"].endswith("Suppose ...")
+
+
+def test_tidy_drops_a_key_terms_section_left_empty_and_hyphens_match():
+    ev = [{"text": "“preventive health check‑up” includes a check-up."}]
+    answer = "### In short\nYes.\n### Key terms\n- **assessee**: a person.\n"
+    assert "Key terms" not in tidy({"answer": answer}, ev)["answer"]
+    kept = "### In short\nYes.\n### Key terms\n- **preventive health check-up**: a check.\n"
+    assert "Key terms" in tidy({"answer": kept}, ev)["answer"]
+
+
+def test_tidy_moves_a_follow_ups_section_out_of_the_text():
+    answer = "### In short\nYes.\n\n### Follow‑ups\n- What is X?\n- What is Y?"
+    out = tidy({"answer": answer, "follow_ups": []}, [])
+    assert out["answer"] == "### In short\nYes." and out["follow_ups"] == ["What is X?",
+                                                                         "What is Y?"]
+    # the listed ones win when the model gave both
+    out = tidy({"answer": answer, "follow_ups": ["Z?"]}, [])
+    assert out["follow_ups"] == ["Z?"]
+
+
+def test_tidy_leaves_refusals_and_plain_answers_alone():
+    refusal = {"answer": "Not in the Act.", "refused": True}
+    assert tidy(refusal, []) is refusal
+    assert tidy({"answer": "One paragraph."}, [])["answer"] == "One paragraph."

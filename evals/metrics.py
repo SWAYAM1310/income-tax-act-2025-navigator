@@ -52,6 +52,9 @@ REFUSAL_HINT = re.compile(r"\b(cannot|can't|unable to|not (?:covered|contained|i
                           r"(?:act|provided))|outside (?:the )?scope|does not (?:contain|"
                           r"address|cover))\b", re.I)
 NUM_TOKEN = re.compile(r"\d[\d,]*(?:\.\d+)?\s?%?")
+#: v9's "### Example" section, up to the next heading or the end of the answer
+EXAMPLE_SECTION = re.compile(r"^#{1,6}\s*Example\b.*?(?=^#{1,6}\s|\Z)", re.M | re.S | re.I)
+INLINE_CITE = re.compile(r"\[\s*C\s*\d+\s*\]")
 TYPE_STEMS = {"substituted": ("substitut", "replac"), "inserted": ("insert", "added"),
               "omitted": ("omit", "delet", "removed"), "renumbered": ("renumber",)}
 
@@ -116,6 +119,13 @@ def fact_match(answer: str, fact: str) -> bool:
     return sum(w in have for w in words) / len(words) >= FACT_COVERAGE
 
 
+def stated_numbers(answer: str) -> set[str]:
+    """The numbers an answer states as facts. v9's worked example uses made-up amounts on
+    purpose and its [Cn] markers are labels, so neither counts."""
+    stated = INLINE_CITE.sub(" ", EXAMPLE_SECTION.sub("\n", answer))
+    return {n.strip() for n in NUM_TOKEN.findall(stated) if len(n.strip()) > 1}
+
+
 def generation_metrics(q: dict, out: dict, cited_chunks: list[dict]) -> dict:
     """out: {"answer", "refused"}; cited_chunks: [{"provisions": [...], "text": ...}]."""
     answer = out.get("answer") or ""
@@ -140,7 +150,7 @@ def generation_metrics(q: dict, out: dict, cited_chunks: list[dict]) -> dict:
     cited_ids = [p for c in cited_chunks for p in c["provisions"]]
     m["citation_recall"] = (sum(covered(cited_ids, g) for g in gold) / len(gold)) if gold else 0.0
     # grounding: every number in the answer appears in some cited passage
-    nums = {n.strip() for n in NUM_TOKEN.findall(answer) if len(n.strip()) > 1}
+    nums = stated_numbers(answer)
     if nums:
         cited_text = " ".join(c["text"] for c in cited_chunks)
         m["grounded_numbers"] = sum(contains(cited_text, n) for n in nums) / len(nums)

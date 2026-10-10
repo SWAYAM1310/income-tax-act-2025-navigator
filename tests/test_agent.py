@@ -7,6 +7,7 @@ import pytest
 from statnav.agent import graph as agent_graph
 from statnav.agent.router import route, scope
 from statnav.agent.tools import Definitions
+from statnav.answer import SYSTEM_PROMPT
 from statnav.llm.client import Reply
 from statnav.retrieve.amend import render
 from statnav.retrieve.dense import Hit
@@ -144,6 +145,24 @@ def test_in_scope_retrieves_packs_and_generates(fake_retrieval):
     # the 90-token hit does not fit beside the 30-token one in a 100-token budget
     assert [h["chunk_id"] for h in r.evidence] == ["v2:s1"]
     assert r.out["answer"] == "It says X." and r.classify_tokens == 42
+
+
+def test_explained_style_uses_the_route_block(fake_retrieval):
+    cfg = {**CFG, "generation": {"prompt": "explained", "role": "answer_explained"}}
+    answer = FakeLLM(json.dumps({"answer": "### In short\nIt changed [C1].", "citations": [],
+                                 "follow_ups": ["What does section 1 say?"], "refused": False}))
+    agent = agent_graph.Agent(None, None, cfg, answer, FakeLLM('{"in_scope": true}'))
+    r = agent.run("How was section 1 amended by the Finance Act, 2026?")
+    system = answer.calls[0][0]["content"]
+    assert r.route == "amendment" and "### What changed" in system
+    assert "### Conditions to check" not in system
+
+
+def test_basic_style_keeps_the_measured_prompt(fake_retrieval):
+    answer = FakeLLM(json.dumps({"answer": "It says X.", "citations": ["C1"], "refused": False}))
+    agent = agent_graph.Agent(None, None, CFG, answer, FakeLLM('{"in_scope": true}'))
+    agent.run("How was section 1 amended by the Finance Act, 2026?")
+    assert answer.calls[0][0]["content"] == SYSTEM_PROMPT
 
 
 def test_retrieval_only_stops_after_packing(fake_retrieval):

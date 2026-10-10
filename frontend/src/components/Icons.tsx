@@ -25,3 +25,5 @@ export const Download = (p: P) => <Icon {...p}><path d="M12 3v12M7 10l5 5 5-5M5 
 export const Pencil = (p: P) => <Icon {...p}><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /></Icon>
 export const Trash = (p: P) => <Icon {...p}><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" /></Icon>
 export const Loader = (p: P) => <Icon {...p}><path d="M21 12a9 9 0 1 1-6.22-8.56" /></Icon>
+export const Bulb = (p: P) => <Icon {...p}><path d="M9 18h6M10 22h4M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2Z" /></Icon>
+export const Reply = (p: P) => <Icon {...p}><path d="M9 14 4 9l5-5" /><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11" /></Icon>

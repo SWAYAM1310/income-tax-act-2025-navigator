@@ -1,7 +1,7 @@
 import pytest
 
 from evals.common import contains, norm
-from evals.metrics import aggregate, fact_match, token_f1
+from evals.metrics import aggregate, fact_match, stated_numbers, token_f1
 
 
 @pytest.mark.parametrize("answer,fact", [
@@ -88,3 +88,12 @@ def test_a_change_type_fact_accepts_its_synonyms():
     assert fact_match('to replace the rate of "60%" with "30%"', "substituted")
     assert fact_match("the clause was newly added", "inserted")
     assert not fact_match("the clause was newly added", "omitted")
+
+
+def test_stated_numbers_skip_the_worked_example_and_citation_labels():
+    answer = "\n".join(["### In short", "Up to Rs. 25,000 [C12].",
+                        "### Example", "Suppose you pay Rs. 30,000.", "- 30,000 - 25,000 = 5,000",
+                        "### Watch out", "Senior citizens: Rs. 50,000 [C3]."])
+    assert stated_numbers(answer) == {"25,000", "50,000"}
+    # an answer without sections (v0-v8) is read whole, as before
+    assert stated_numbers("Rates 10% and Rs. 20,000 [C1].") == {"10%", "20,000"}

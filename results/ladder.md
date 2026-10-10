@@ -388,6 +388,53 @@ words from the bracket the endnote tags in the provision) and `inserted (not in 
   rescored from cache (this moved v3 0.562 → 0.604 and v4 0.708 → 0.771).
 - Cost: ~66K gpt-oss-120b tokens on 2026-10-06 for the substitution runs (v6, v8, oracle) and v8's dev_mini answers.
 
+## Phase 14: v9 (answers explained for non-experts)
+
+v9 is v8 with a different answer prompt (`answer.py:EXPLAINED_PROMPT`) and nothing else: same
+retrieval, evidence and agent. The answer is Markdown: **In short**, **What this means for you**,
+a block chosen by the agent's route (general: *Conditions to check*; table: *The numbers*;
+amendment: *What changed*; definition: *What it includes and excludes*), **Watch out**, a worked
+**Example**, and **Key terms**, with a `[Cn]` marker on each sentence (shown as a clickable §
+mark) and two or three `follow_ups`. It answers with its own model role, `answer_explained`
+(gpt-oss-120b, medium reasoning, 2,400-token cap).
+
+### End-to-end, dev_mini (n = 30), against v8
+
+| | Fact rec. | Exact | Cite prec. | Cite rec. | Grounded | Table exact | Amend. type | Amend. dir. | Refusal P / R | LLM tok/q |
+|---|---|---|---|---|---|---|---|---|---|---|
+| v8 | 0.875 | 0.701 | **0.958** | 0.896 | 1.000 | 1.000 | 1.000 | 1.000 | 1.00 / 1.00 | **2,532** |
+| **v9** | **0.917** | **0.736** | 0.868 | **0.958** | 1.000 | 1.000 | 1.000 | 1.000 | 1.00 / 1.00 | 3,835 |
+
+- **More of the expected facts appear, and no measured score regresses except citation
+  precision.** The longer answers name more of the conditions and numbers the gold facts list.
+- **Citation precision 0.958 → 0.868** is v9 citing neighbouring passages as well: a table row's
+  notes beside the row (table-2e663b9b cites `s393:tbl1#3(i)` plus notes 2 and 4), or several
+  sub-sections of the same section. The metric counts any passage outside the gold set as
+  imprecise, so this is extra support rather than wrong support, but it is a real loss of
+  focus and is reported as measured.
+- **Grounded numbers ignore the Example section** (`evals/metrics.py:stated_numbers`): its
+  "Suppose you pay Rs. 30,000" amounts are made up on purpose. Answers up to v8 have no such
+  section, so their scores are unchanged.
+- **Found while tuning (on dev_mini's 4 UI examples and one s126 question, not on test):**
+  - At low reasoning effort the model read s126(2)(b)'s "up to Rs. 25000 in aggregate" for
+    "parent or parents" as a limit *per parent*; medium reasoning and a reading rule ("in
+    aggregate ... is one combined limit") fixed it. High reasoning does not fit the free tier:
+    Groq counts prompt + `max_tokens` against the 8K tokens/minute limit.
+  - Given a "Key terms" section, the model explained words from memory ("senior citizen: 60
+    years or older, as defined elsewhere") and invented meanings for clause numbers. Prompt
+    rules did not stop it, so `answer.tidy` now keeps a term only if a passage defines it
+    (`"term" means/includes`). It also moves a "Follow-ups" section the model sometimes writes
+    into the text into `follow_ups`.
+  - Worked examples are the main new risk. On s126 the model several times added an "if you
+    also paid ..." step that broke a restriction it had just stated (s126(7): no medical-expense
+    deduction for an insured senior citizen). The prompt now orders *Watch out* before *Example*
+    and forbids extra steps; it still happens occasionally on s126(4)'s two separate caps, which
+    the model tends to read as one. No metric measures example correctness.
+  - The first amendment run dropped amendment type to 0.667: answers gave both wordings
+    correctly but never said "substituted". The *What changed* block now asks for the type.
+- Cost: ~175K gpt-oss-120b tokens on 2026-10-10 (tuning, the UI fixture and two dev_mini passes,
+  the second only re-asking the 6 amendment questions).
+
 ## Final numbers: frozen test split (n = 84, retrieval only)
 
 The test split was frozen by checksum in Phase 3 and run once, at the end, with `--final`
