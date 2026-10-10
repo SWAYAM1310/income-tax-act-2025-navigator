@@ -1,6 +1,6 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-10. **Phase 14 (v9, plain-English explained answers) DONE, uncommitted and not deployed** (dev_mini fact recall 0.917, cite P/R 0.868/0.958, everything else = v8; see Phase 14). Earlier: **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) LIVE at https://income-tax-act-2025-navigator.vercel.app (API https://income-tax-act-2025-navigator-production.up.railway.app).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
+_Last updated: 2026-10-10. **Phase 14 (v9, plain-English explained answers) DONE, committed a69cf60 and pushed 2026-10-10; Vercel deployed it, Railway did not (manual redeploy pending)** (dev_mini fact recall 0.917, cite P/R 0.868/0.958, everything else = v8; see Phase 14). Earlier: **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) LIVE at https://income-tax-act-2025-navigator.vercel.app (API https://income-tax-act-2025-navigator-production.up.railway.app).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
 
 > **Resume here:** the project is complete; only optional Next steps remain. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, Phase 11 final 4eb68dc, all pushed. `.github/workflows/ci.yml` is local and untracked on purpose (CI skipped).
 
@@ -350,7 +350,7 @@ This is a RAG system that answers questions about India's **Income-tax Act, 2025
     - RAM 83 MB idle, 183 MB after an answer.
 
     `tasks.py check`: 160 passed. Playwright 16/16 (new: the 429 message).
-- **Phase 14, v9 explained answers — DONE (2026-10-10, uncommitted, not deployed).** Plan:
+- **Phase 14, v9 explained answers — DONE (2026-10-10, a69cf60, pushed; live redeploy not verified).** Plan:
   `C:\Users\ASUS\.claude\plans\you-can-see-this-polymorphic-crane.md`. The user wanted answers a
   non-expert can understand (screenshot: In short / What this means / Conditions / Example) plus
   Watch out, Key terms, follow-up questions, inline § citations, a layout per question type.
@@ -480,8 +480,12 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 ## Next steps (in order)
 
-**Phase 14 follow-ups (v9):** ask the user before committing; then redeploy (Railway rebuild for
-the API + `models.yaml`, Vercel for the UI) only with their approval. Optional: a check on worked
+**Phase 14 follow-ups (v9):** committed and pushed (a69cf60). Vercel deployed it automatically
+(GitHub status: success). **Railway did not**: it has no deployment for a69cf60 and `/health`
+still reports v8, so it is not auto-deploying from `main`. The user will redeploy by hand
+(Deployments → Deploy on a69cf60) and should check Settings → Source (repo + branch `main`).
+Done when `/health` reports `"default_version":"v9"`. Until then the new UI shows v8's plain
+answers (the UI is backwards compatible). Optional: a check on worked
 examples (e.g. recompute the arithmetic, or flag examples that contradict Watch out), and a dev
 end-to-end run of v9 (~138 x 3.8K tokens, 3 Groq days).
 
