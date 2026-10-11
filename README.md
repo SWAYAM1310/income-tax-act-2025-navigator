@@ -1,4 +1,4 @@
-# Income-tax Act, 2025 navigator
+# TaxLens: Income-tax Act, 2025 navigator
 
 Ask a question about India's **Income-tax Act, 2025, as amended by the Finance Act, 2026**, and
 get an answer that quotes the Act and cites the exact provisions it relies on. It handles

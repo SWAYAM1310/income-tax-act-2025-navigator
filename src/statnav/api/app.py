@@ -229,7 +229,7 @@ def create_app(services: Services | None = None, rate_limit: int | None = None) 
     if rate_limit is None:
         rate_limit = int(os.environ.get("STATNAV_RATE_LIMIT") or 0)
     limiter = RateLimit(rate_limit)
-    app = FastAPI(title="Income-tax Act, 2025 navigator",
+    app = FastAPI(title="TaxLens: Income-tax Act, 2025 API",
                   description="Cited answers about India's Income-tax Act, 2025 (as amended by "
                               "the Finance Act, 2026). Not tax advice.")
     app.state.services = svc

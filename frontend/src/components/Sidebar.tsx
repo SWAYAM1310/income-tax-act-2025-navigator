@@ -29,7 +29,7 @@ export function Sidebar({ chats, current, view, streamingChat, onNew, onOpen, on
       <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
         <button type="button" onClick={onHome} title="Show the welcome page"
           className="flex items-center gap-2 rounded-md px-1.5 py-1 font-serif text-[1.05rem] hover:bg-raise">
-          <Mark /> Act navigator
+          <Mark /> TaxLens
         </button>
         <button type="button" onClick={onHide} aria-label="Hide the chat list"
           className="rounded-md p-2 text-ink-soft hover:bg-raise hover:text-ink">

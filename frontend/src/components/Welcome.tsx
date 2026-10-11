@@ -49,7 +49,7 @@ export function Welcome({ onStart, onLadder }: { onStart: () => void; onLadder: 
     <div className="flex min-h-dvh flex-col bg-bg">
       <header className="flex items-center justify-between px-4 py-4 sm:px-8">
         <span className="flex items-center gap-2.5 font-serif text-lg">
-          <Mark /> Income-tax Act navigator
+          <Mark /> TaxLens
         </span>
         <button type="button" onClick={onStart}
           className="rounded-md px-3 py-1.5 text-sm text-ink-soft transition-colors hover:bg-raise hover:text-ink">

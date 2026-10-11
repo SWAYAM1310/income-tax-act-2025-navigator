@@ -1,7 +1,7 @@
 [project]
 name = "statnav"
 version = "0.1.0"
-description = "Amendment-aware statute navigator for the Income-tax Act, 2025 (RAG + eval pipeline)"
+description = "TaxLens: amendment-aware statute navigator for the Income-tax Act, 2025 (RAG + eval pipeline)"
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [

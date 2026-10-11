@@ -106,7 +106,7 @@ export const deleteAllChats = () => commit([], true)
 
 /** One chat as Markdown: each question, its answer and the provisions it cites. */
 export function toMarkdown(c: Chat): string {
-  const lines = [`# ${c.title}`, '', `_Exported ${new Date().toLocaleString()} from the Income-tax Act, 2025 navigator. Not tax advice._`, '']
+  const lines = [`# ${c.title}`, '', `_Exported ${new Date().toLocaleString()} from TaxLens (Income-tax Act, 2025). Not tax advice._`, '']
   for (const t of c.turns) {
     const text = t.answer ? resolveMarkers(t.answer.answer, t.evidence) : (t.text || t.error || '(no answer)')
     // the answer's own "### " sections sit one level below the question

@@ -68,7 +68,7 @@ def chart(rows: list[tuple[str, dict, dict]], path) -> None:
                     label=label, linewidth=2)
     ax.set_ylim(0, 1.02)
     ax.set_ylabel("score")
-    ax.set_title("Income-tax Act 2025 navigator: eval ladder")
+    ax.set_title("TaxLens: eval ladder")
     ax.grid(alpha=0.3)
     ax.legend(loc="lower right", frameon=False)
     for side in ("top", "right"):

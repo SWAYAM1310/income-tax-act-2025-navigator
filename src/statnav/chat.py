@@ -75,7 +75,7 @@ HELP = """commands:
 
 
 def repl(bot: Answerer, show_evidence: bool) -> None:
-    print(f"Income-tax Act, 2025 navigator - version {bot.version} "
+    print(f"TaxLens (Income-tax Act, 2025) - version {bot.version} "
           f"(chunks {bot.chunks}, k={bot.k}, {bot.budget}-token evidence budget)")
     print("Ask a question, or /help for commands. Ctrl-C to quit.")
     k: int | None = None
