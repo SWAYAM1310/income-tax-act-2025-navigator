@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { ask, useLive } from './ask'
 import { getChat, useChats } from './history'
-import { flag } from './prefs'
+import { flag, reducedMotion } from './prefs'
 import { ChatView } from './components/ChatView'
 import type { ComposerHandle } from './components/Composer'
 import { LadderView } from './components/LadderView'
@@ -52,13 +53,24 @@ export default function App() {
 
   const start = () => { flag('seenWelcome', true); go('#/new'); setRoute({ view: 'chat', id: null }) }
 
-  // a question asked on the welcome page opens as a new chat
-  const askFromWelcome = (q: string) => {
+  // A question asked on the welcome page opens as a new chat, in a view transition: the box
+  // glides down to the chat's composer, the question (`from`, the text box or the example's text)
+  // flies to where the answer starts, and the sidebar slides in (styles.css, "welcome -> chat").
+  const askFromWelcome = (q: string, from?: HTMLElement | null) => {
     flag('seenWelcome', true)
-    const id = ask(null, q)
-    if (!id) { start(); return }  // another answer is still streaming
-    go(`#/c/${id}`)
-    setRoute({ view: 'chat', id })
+    let id: string | null = null
+    const swap = () => flushSync(() => {
+      id = ask(null, q)  // null while another answer is still streaming
+      setRoute({ view: 'chat', id })
+    })
+    const after = () => go(id ? `#/c/${id}` : '#/new')
+    if (document.startViewTransition && !reducedMotion()) {
+      if (from) from.style.viewTransitionName = 'question'
+      document.startViewTransition(swap).updateCallbackDone.then(after, after)
+    } else {
+      swap()
+      after()
+    }
   }
 
   if (route.view === 'welcome') {
@@ -88,7 +100,7 @@ export default function App() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      {!hidden && <aside className="hidden w-[16.5rem] shrink-0 border-r border-line md:flex">{sidebar}</aside>}
+      {!hidden && <aside style={{ viewTransitionName: 'sidebar' }} className="hidden w-[16.5rem] shrink-0 border-r border-line md:flex">{sidebar}</aside>}
 
       {/* phones: the chat list is a drawer */}
       <div className={`fixed inset-0 z-50 md:hidden ${drawer ? '' : 'pointer-events-none'}`} inert={!drawer}>

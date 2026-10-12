@@ -3,7 +3,7 @@ import { pickExamples } from '../examples'
 import { ActField } from './ActMap'
 import { Composer } from './Composer'
 
-type Props = { onAsk: (q: string) => void; onChats: () => void; onLadder: () => void }
+type Props = { onAsk: (q: string, from?: HTMLElement | null) => void; onChats: () => void; onLadder: () => void }
 
 export function Welcome({ onAsk, onChats, onLadder }: Props) {
   // a definition, a rate and an amendment; the refusal example stays in the chat
@@ -34,17 +34,17 @@ export function Welcome({ onAsk, onChats, onLadder }: Props) {
         </p>
 
         <div className="enter mt-10 w-full max-w-[40rem] text-left [animation-delay:490ms]">
-          <Composer hero busy={false} elsewhere={false} onAsk={onAsk} onStop={() => {}} />
+          <Composer hero name="composer" busy={false} elsewhere={false} onAsk={onAsk} onStop={() => {}} />
         </div>
 
         <ul aria-label="Example questions"
           className="enter m-0 mt-5 flex w-full max-w-[40rem] list-none flex-col gap-0.5 p-0 text-left [animation-delay:610ms]">
           {examples.map((x) => (
             <li key={x.q}>
-              <button type="button" onClick={() => onAsk(x.q)}
+              <button type="button" onClick={(e) => onAsk(x.q, e.currentTarget.querySelector<HTMLElement>('.example-q'))}
                 className="rail group flex w-full rounded-lg px-4 py-2 text-left hover:bg-raise/80">
                 <span className="rail-text flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-3">
-                  <span className="max-w-full truncate font-serif text-[0.98rem] text-ink/80 transition-colors group-hover:text-jade">{x.q}</span>
+                  <span className="example-q max-w-full truncate font-serif text-[0.98rem] text-ink/80 transition-colors group-hover:text-jade">{x.q}</span>
                   <small className="shrink-0 text-xs text-ink-soft sm:ml-auto">{x.why}</small>
                 </span>
               </button>

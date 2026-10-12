@@ -56,6 +56,13 @@ html[data-size='l'] { font-size: 18px; }
 }
 html[data-motion='reduced'] *, html[data-motion='reduced'] *::before,
 html[data-motion='reduced'] *::after { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion='full'])::view-transition-group(*),
+  html:not([data-motion='full'])::view-transition-old(*),
+  html:not([data-motion='full'])::view-transition-new(*) { animation: none !important; }
+}
+html[data-motion='reduced']::view-transition-group(*), html[data-motion='reduced']::view-transition-old(*),
+html[data-motion='reduced']::view-transition-new(*) { animation: none !important; }
 
 /* ---- motion that answers an action ---------------------------------------------------- */
 @keyframes caret { 50% { opacity: 0; } }
@@ -124,6 +131,24 @@ html[data-motion='reduced'] *::after { animation: none !important; transition: n
   .draw-line:hover::after, .draw-line:focus-visible::after { transform: scaleX(1); }
 }
 @keyframes sheen { to { transform: translateX(130%); } }
+
+/* ---- welcome -> chat (App.tsx askFromWelcome, a view transition) ---------------------------
+   The question box glides to the chat's composer, the question flies to the heading the answer
+   starts under, the welcome page sinks away and the chat page, its sidebar and header arrive. */
+::view-transition-group(*) { animation-duration: 700ms; animation-timing-function: var(--ease-out-soft); }
+::view-transition-old(root) { animation: vt-out 220ms var(--ease-out-soft) both; }
+::view-transition-new(root) { animation: vt-in 520ms 170ms var(--ease-out-soft) both; }
+::view-transition-new(sidebar):only-child { animation: vt-from-left 650ms 140ms var(--ease-out-soft) both; }
+::view-transition-new(chat-header):only-child { animation: vt-drop 520ms 260ms var(--ease-out-soft) both; }
+/* the question: a quick hand-over between the two texts while the box carries them */
+::view-transition-old(question) { animation: vt-fade-out 260ms ease-in both; }
+::view-transition-new(question) { animation: fade 420ms 160ms var(--ease-out-soft) both; }
+::view-transition-old(composer), ::view-transition-new(composer) { animation-duration: 700ms; }
+@keyframes vt-out { to { opacity: 0; transform: scale(0.97); filter: blur(6px); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(10px); } }
+@keyframes vt-from-left { from { opacity: 0; transform: translateX(-32px); } }
+@keyframes vt-drop { from { opacity: 0; transform: translateY(-12px); } }
+@keyframes vt-fade-out { to { opacity: 0; } }
 
 /* ---- the statute sheet ------------------------------------------------------------------ */
 @layer components {

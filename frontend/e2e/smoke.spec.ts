@@ -9,6 +9,13 @@ const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, imp
 async function mockApi(page: Page) {
   // the welcome screen draws its example questions at random; 0 picks the first of each pool
   await page.addInitScript(() => { Math.random = () => 0 })
+  // count the view transitions the welcome page starts when it hands a question to the chat
+  await page.addInitScript(() => {
+    const w = window as unknown as { transitions: number }
+    w.transitions = 0
+    const start = document.startViewTransition?.bind(document)
+    if (start) document.startViewTransition = ((cb: () => void) => { w.transitions++; return start(cb) }) as typeof document.startViewTransition
+  })
   await page.route('**/api/query', async (route) => {
     const q = JSON.parse(route.request().postData() ?? '{}').question as string
     if (q.includes('one question too many')) {
@@ -52,11 +59,25 @@ test.describe('first visit', () => {
     await expect(page.getByRole('heading', { name: 'What does the Act say?' })).toBeVisible()
   })
 
-  test('a question asked on the welcome opens as a new chat', async ({ page }) => {
-    await page.getByRole('textbox', { name: 'Ask about the Act' }).fill('How was section 99(2) amended by the Finance Act, 2026?')
+  const transitions = (page: Page) => page.evaluate(() => (window as unknown as { transitions: number }).transitions)
+
+  test('a question asked on the welcome glides into a new chat', async ({ page }) => {
+    const box = page.getByRole('textbox', { name: 'Ask about the Act' })
+    await box.click()  // focusing and typing stay on the welcome page
+    await box.fill('How was section 99(2) amended by the Finance Act, 2026?')
+    await expect(page.getByRole('heading', { name: 'Ask the Income-tax Act, 2025.' })).toBeVisible()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('article', { name: AMENDMENT })).toContainText('(1)(a)(ii) or (b)')
     await expect(page).toHaveURL(/#\/c\//)
+    expect(await transitions(page)).toBe(1)
+    await expect(page.getByRole('textbox', { name: 'Ask about the Act' })).toHaveValue('')
+    await expect(page.getByRole('heading', { name: 'Ask the Income-tax Act, 2025.' })).toHaveCount(0)
+  })
+
+  test('an example on the welcome glides into a new chat', async ({ page }) => {
+    await page.getByRole('list', { name: 'Example questions' }).getByRole('button', { name: AMENDMENT }).click()
+    await expect(page.getByRole('article', { name: AMENDMENT })).toContainText('(1)(a)(ii) or (b)')
+    expect(await transitions(page)).toBe(1)
   })
 })
 

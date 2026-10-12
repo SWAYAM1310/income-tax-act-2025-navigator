@@ -75,7 +75,7 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
   return (
     <div className="relative flex h-dvh min-w-0 flex-1">
       <div className={`relative flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-out ${open ? 'xl:mr-[min(44rem,44vw)]' : ''}`}>
-        <header className={`absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-2 border-b bg-bg/70 px-3 backdrop-blur-md transition-colors duration-300 ${scrolled ? 'border-line' : 'border-transparent'}`}>
+        <header style={{ viewTransitionName: 'chat-header' }} className={`absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-2 border-b bg-bg/70 px-3 backdrop-blur-md transition-colors duration-300 ${scrolled ? 'border-line' : 'border-transparent'}`}>
           {toolbar}
           <h1 className="m-0 truncate text-sm font-bold text-ink-soft">{chat?.title ?? 'New chat'}</h1>
         </header>
@@ -88,15 +88,15 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
           }}>
           <div className="mx-auto w-full max-w-[46rem] px-4 pt-22 pb-10 sm:px-6">
             {turns.length === 0 && <Empty onPick={(q) => onAsk(q)} />}
-            {turns.map((t) => (
-              <TurnView key={t.id} t={t} open={open} setOpen={setOpen} onAsk={busy ? null : onAsk} />
+            {turns.map((t, i) => (
+              <TurnView key={t.id} t={t} first={i === 0} open={open} setOpen={setOpen} onAsk={busy ? null : onAsk} />
             ))}
           </div>
         </div>
 
         <div className="shrink-0 bg-gradient-to-t from-bg via-bg to-transparent px-4 pt-2 pb-4 sm:px-6">
           <div className="mx-auto max-w-[46rem]">
-            <Composer ref={composer} busy={busy} elsewhere={!!live && !busy} onAsk={onAsk} onStop={stop} />
+            <Composer ref={composer} name="composer" busy={busy} elsewhere={!!live && !busy} onAsk={(q) => onAsk(q)} onStop={stop} />
           </div>
         </div>
       </div>
@@ -138,13 +138,15 @@ function Empty({ onPick }: { onPick: (q: string) => void }) {
 
 type TurnProps = {
   t: Turn
+  /** the chat's first question, where a question asked on the welcome page lands */
+  first?: boolean
   open: Open | null
   setOpen: (o: Open) => void
   /** ask a follow-up; null while another answer is streaming in this chat */
   onAsk: ((q: string) => void) | null
 }
 
-function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
+function TurnView({ t, first, open, setOpen, onAsk }: TurnProps) {
   const lines = t.steps.map(describe).filter((x): x is string => !!x)
   const a = t.answer
   const streaming = t.status === 'streaming'
@@ -154,7 +156,7 @@ function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
 
   return (
     <article className="mb-12" aria-label={t.question}>
-      <h3 className="m-0 font-serif text-[1.45rem] leading-snug font-medium tracking-[-0.01em]">{t.question}</h3>
+      <h3 style={first ? { viewTransitionName: 'question' } : undefined} className="m-0 font-serif text-[1.45rem] leading-snug font-medium tracking-[-0.01em]">{t.question}</h3>
 
       {lines.length > 0 && (
         <ol className="mt-4 mb-0 ml-1 list-none space-y-1.5 border-l border-line p-0 pl-4 text-sm text-ink-soft" aria-live="polite">
