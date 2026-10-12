@@ -7,6 +7,8 @@ import { expect, test, type Page } from '@playwright/test'
 const fixture = (name: string) => readFileSync(new URL(`./fixtures/${name}`, import.meta.url), 'utf8')
 
 async function mockApi(page: Page) {
+  // the welcome screen draws its example questions at random; 0 picks the first of each pool
+  await page.addInitScript(() => { Math.random = () => 0 })
   await page.route('**/api/query', async (route) => {
     const q = JSON.parse(route.request().postData() ?? '{}').question as string
     if (q.includes('one question too many')) {
@@ -59,6 +61,16 @@ test.describe('chat', () => {
 
   test('says it is not tax advice', async ({ page }) => {
     await expect(page.getByText('Not tax advice.')).toBeVisible()
+  })
+
+  test('draws different example questions on each visit', async ({ page }) => {
+    const examples = page.getByRole('list', { name: 'Example questions' }).getByRole('listitem')
+    await expect(examples).toHaveCount(4)
+    const first = await examples.allInnerTexts()
+    await page.reload()
+    await expect(examples).toHaveCount(4)
+    const second = await examples.allInnerTexts()
+    for (let i = 0; i < 4; i++) expect(second[i]).not.toBe(first[i])  // no slot repeats
   })
 
   test('answers with a citation that opens the provision, amended words marked', async ({ page }) => {

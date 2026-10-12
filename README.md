@@ -204,6 +204,8 @@ service. The UI is a static Vite build on Vercel that calls the API directly.
      - `JINA_API_KEY`
      - `STATNAV_RATE_LIMIT=10` (questions per hour per visitor)
      - `STATNAV_CORS_ORIGINS=https://<your-app>.vercel.app`
+     - `PORT=8000` (must match the domain's target port; without it Railway assigns 8080
+       and the domain returns 502)
    - Generate a public domain.
 2. **Vercel** (Hobby). Import the repo with root directory `frontend`.
    - Set `VITE_API_BASE=https://<your-service>.up.railway.app`.
