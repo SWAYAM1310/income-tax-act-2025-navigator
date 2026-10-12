@@ -8,9 +8,10 @@ const browser = await chromium.launch()
 const page = await browser.newPage({ viewport: { width: 1440, height: 960 } })
 
 await page.goto(URL)
-await page.getByText(/with effect from 1-4-2026\.$/).waitFor()  // the welcome has played
+await page.getByRole('heading', { name: 'Ask the Income-tax Act, 2025.' }).waitFor()
+await page.waitForTimeout(3000)  // the field's entrance has played
 await page.screenshot({ path: `${out}/1-welcome.png` })
-await page.getByRole('button', { name: 'Start asking' }).click()
+await page.getByRole('button', { name: 'Your chats' }).click()
 
 await page.getByRole('button', { name: /meaning of "transfer"/ }).click()
 const sheet = page.getByRole('complementary', { name: 'Provision' })

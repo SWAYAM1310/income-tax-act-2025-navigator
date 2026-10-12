@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { useLive } from './ask'
+import { ask, useLive } from './ask'
 import { getChat, useChats } from './history'
 import { flag } from './prefs'
 import { ChatView } from './components/ChatView'
@@ -52,8 +52,17 @@ export default function App() {
 
   const start = () => { flag('seenWelcome', true); go('#/new'); setRoute({ view: 'chat', id: null }) }
 
+  // a question asked on the welcome page opens as a new chat
+  const askFromWelcome = (q: string) => {
+    flag('seenWelcome', true)
+    const id = ask(null, q)
+    if (!id) { start(); return }  // another answer is still streaming
+    go(`#/c/${id}`)
+    setRoute({ view: 'chat', id })
+  }
+
   if (route.view === 'welcome') {
-    return <Welcome onStart={start} onLadder={() => { flag('seenWelcome', true); go('#/ladder') }} />
+    return <Welcome onAsk={askFromWelcome} onChats={start} onLadder={() => { flag('seenWelcome', true); go('#/ladder') }} />
   }
 
   const hide = (h: boolean) => { flag('sidebarHidden', h); setHidden(h) }

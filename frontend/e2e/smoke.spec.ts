@@ -41,14 +41,22 @@ const AMENDMENT = /section 99\(2\) amended/
 test.describe('first visit', () => {
   test.beforeEach(async ({ page }) => { await mockApi(page); await page.goto('/') })
 
-  test('plays the welcome, then Skip opens an empty chat', async ({ page }) => {
+  test('shows the welcome once, then Your chats opens an empty chat', async ({ page }) => {
     await expect(page.getByRole('heading', { name: 'Ask the Income-tax Act, 2025.' })).toBeVisible()
-    await expect(page.getByRole('img', { name: /A map of the Act: 536 marks/ })).toBeVisible()
-    await expect(page.getByText(/Section 99\(2\) was amended by substituting/)).toBeVisible({ timeout: 10_000 })
-    await page.getByRole('button', { name: 'Skip' }).click()
+    await expect(page.getByRole('img', { name: 'The Act as 536 sections, one dot each' })).toBeVisible()
+    await expect(page.getByText('Not tax advice.')).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Example questions' }).getByRole('listitem')).toHaveCount(3)
+    await page.getByRole('button', { name: 'Your chats' }).click()
     await expect(page.getByRole('heading', { name: 'What does the Act say?' })).toBeVisible()
     await page.reload()  // the welcome shows once
     await expect(page.getByRole('heading', { name: 'What does the Act say?' })).toBeVisible()
+  })
+
+  test('a question asked on the welcome opens as a new chat', async ({ page }) => {
+    await page.getByRole('textbox', { name: 'Ask about the Act' }).fill('How was section 99(2) amended by the Finance Act, 2026?')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('article', { name: AMENDMENT })).toContainText('(1)(a)(ii) or (b)')
+    await expect(page).toHaveURL(/#\/c\//)
   })
 })
 
@@ -59,8 +67,9 @@ test.describe('chat', () => {
     await page.goto('/')
   })
 
-  test('says it is not tax advice', async ({ page }) => {
-    await expect(page.getByText('Not tax advice.')).toBeVisible()
+  test('keeps the not-tax-advice line to the welcome page', async ({ page }) => {
+    await expect(page.getByRole('heading', { name: 'What does the Act say?' })).toBeVisible()
+    await expect(page.getByText('Not tax advice.')).toHaveCount(0)
   })
 
   test('draws different example questions on each visit', async ({ page }) => {
@@ -79,7 +88,6 @@ test.describe('chat', () => {
     const answer = page.getByRole('article', { name: AMENDMENT })
     await expect(answer).toContainText('(1)(a)(i) or (b)')  // the old and the new wording
     await expect(answer).toContainText('(1)(a)(ii) or (b)')
-    await expect(answer.getByRole('img', { name: /Where the passages sit in the Act: sections 99, 267, 288, 352, 533; cited: 99/ })).toBeVisible()
 
     // the provision opens only when its citation is clicked
     const sheet = page.getByRole('complementary', { name: 'Provision' })

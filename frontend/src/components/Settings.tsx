@@ -28,8 +28,8 @@ export function Settings() {
   return (
     <div ref={box} className="relative">
       <button type="button" aria-expanded={open} onClick={() => { setOpen((o) => !o); setConfirm(false) }}
-        className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-raise">
-        <Gear /> Settings
+        className="rail w-full rounded-md px-2.5 py-2 text-left text-sm hover:bg-raise">
+        <span className="rail-text flex items-center gap-2.5"><Gear /> Settings</span>
       </button>
       {open && (
         <div role="dialog" aria-label="Settings"
@@ -84,7 +84,7 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 function Choice({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button type="button" aria-pressed={on} onClick={onClick}
-      className="flex items-center gap-1.5 rounded-md border border-line-strong px-2.5 py-1 text-sm hover:border-ink-soft aria-pressed:border-jade aria-pressed:bg-jade-tint aria-pressed:text-jade">
+      className="pill flex items-center gap-1.5 rounded-full border-line-strong px-3 py-1 text-sm aria-pressed:border-jade aria-pressed:bg-jade-tint aria-pressed:text-jade">
       {children}
     </button>
   )

@@ -19,9 +19,11 @@
   --color-turmeric-tint: #2b2008;
   --color-refusal: #f27a6e;
   --color-refusal-tint: #2a0f0c;
+  --color-dot: #1a241e;
+  --color-jade-glow: color-mix(in srgb, var(--color-jade) 28%, transparent);
 
   --font-serif: 'Spectral', 'Iowan Old Style', Georgia, serif;
-  --font-sans: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
+  --font-sans: 'Atkinson Hyperlegible Next', 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
 
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -67,6 +69,61 @@ html[data-motion='reduced'] *::after { animation: none !important; transition: n
 .spin { animation: spin 0.9s linear infinite; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .fade { animation: fade 400ms var(--ease-out-soft) both; }
+/* the welcome page's one orchestrated entrance (staggered with animation-delay) */
+@keyframes enter { from { opacity: 0; transform: translateY(14px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.enter { animation: enter 700ms var(--ease-out-soft) both; }
+/* the agent step that is running now */
+@keyframes pulse-dot {
+  0% { box-shadow: 0 0 0 0 var(--color-jade-glow); }
+  70%, 100% { box-shadow: 0 0 0 6px transparent; }
+}
+.pulse-dot { animation: pulse-dot 1.4s ease-out infinite; }
+
+/* ---- hover language: everything you can act on shows a jade rail, line or glow ----------- */
+@layer components {
+  /* list rows (examples, follow-ups, chats): a rail grows down the left edge, the text steps in */
+  .rail { position: relative; transition: background-color 200ms var(--ease-out-soft), color 200ms; }
+  .rail::before {
+    content: ''; position: absolute; left: 0; top: 18%; bottom: 18%; width: 2px; border-radius: 2px;
+    background: var(--color-jade); transform: scaleY(0); transform-origin: top;
+    transition: transform 280ms var(--ease-out-soft);
+  }
+  .rail:hover::before, .rail:focus-visible::before, .rail[aria-current='page']::before { transform: scaleY(1); }
+  .rail:disabled::before { transform: scaleY(0); }
+  .rail-text { display: block; transition: transform 280ms var(--ease-out-soft); }
+  .rail:hover:not(:disabled) .rail-text, .rail:focus-visible .rail-text { transform: translateX(4px); }
+
+  /* pills (citations, passage labels, choices): lift and pick up a jade edge */
+  .pill {
+    border: 1px solid transparent;
+    transition: transform 180ms var(--ease-out-soft), box-shadow 220ms var(--ease-out-soft),
+      border-color 180ms, background-color 180ms, color 180ms;
+  }
+  .pill:hover, .pill:focus-visible { transform: translateY(-1px); border-color: var(--color-jade);
+    box-shadow: 0 6px 18px -6px var(--color-jade-glow); }
+  .pill:active { transform: scale(0.97); }
+
+  /* primary buttons: a sheen crosses once, the button lifts, and presses in */
+  .sheen { position: relative; overflow: hidden; isolation: isolate;
+    transition: transform 180ms var(--ease-out-soft), box-shadow 240ms var(--ease-out-soft),
+      border-color 180ms, color 180ms, opacity 180ms; }
+  .sheen::after {
+    content: ''; position: absolute; inset: 0; pointer-events: none; transform: translateX(-130%);
+    background: linear-gradient(105deg, transparent 30%, rgb(255 255 255 / 0.28) 50%, transparent 70%);
+  }
+  .sheen:hover:not(:disabled)::after { animation: sheen 750ms var(--ease-out-soft); }
+  .sheen:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 10px 28px -10px var(--color-jade-glow); }
+  .sheen:active:not(:disabled) { transform: scale(0.96); }
+
+  /* text links: an underline draws in from the left */
+  .draw-line { position: relative; }
+  .draw-line::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -2px; height: 1px; background: currentColor;
+    transform: scaleX(0); transform-origin: left; transition: transform 280ms var(--ease-out-soft);
+  }
+  .draw-line:hover::after, .draw-line:focus-visible::after { transform: scaleX(1); }
+}
+@keyframes sheen { to { transform: translateX(130%); } }
 
 /* ---- the statute sheet ------------------------------------------------------------------ */
 @layer components {

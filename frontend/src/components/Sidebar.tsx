@@ -28,22 +28,22 @@ export function Sidebar({ chats, current, view, streamingChat, onNew, onOpen, on
     <nav aria-label="Chats" className="flex h-full w-full flex-col bg-panel">
       <div className="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
         <button type="button" onClick={onHome} title="Show the welcome page"
-          className="flex items-center gap-2 rounded-md px-1.5 py-1 font-serif text-[1.05rem] hover:bg-raise">
+          className="flex items-center gap-2 rounded-md px-1.5 py-1 font-serif text-[1.05rem] transition-colors hover:bg-raise">
           <Mark /> TaxLens
         </button>
         <button type="button" onClick={onHide} aria-label="Hide the chat list"
-          className="rounded-md p-2 text-ink-soft hover:bg-raise hover:text-ink">
+          className="rounded-md p-2 text-ink-soft transition-colors hover:bg-raise hover:text-ink">
           <Panel />
         </button>
       </div>
 
       <div className="px-3">
         <button type="button" onClick={onNew}
-          className="flex w-full items-center gap-2 rounded-lg border border-line-strong px-3 py-2.5 text-left font-bold transition-colors hover:border-jade hover:text-jade">
+          className="sheen flex w-full items-center gap-2 rounded-xl border border-line-strong px-3 py-2.5 text-left font-bold hover:border-jade hover:text-jade">
           <Plus /> New chat
           <kbd className="ml-auto rounded border border-line px-1.5 text-[0.7rem] font-normal text-ink-soft">Ctrl K</kbd>
         </button>
-        <label className="mt-2 flex items-center gap-2 rounded-lg bg-raise px-3 py-2 text-ink-soft focus-within:outline-2 focus-within:outline-jade">
+        <label className="mt-2 flex items-center gap-2 rounded-xl border border-transparent bg-raise px-3 py-2 text-ink-soft transition-[border-color,box-shadow] duration-200 focus-within:border-jade focus-within:shadow-[0_0_0_3px_var(--color-jade-glow)]">
           <Search />
           <span className="sr-only">Search chats</span>
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search chats"
@@ -74,8 +74,8 @@ export function Sidebar({ chats, current, view, streamingChat, onNew, onOpen, on
 
       <div className="border-t border-line p-2">
         <button type="button" onClick={onLadder} aria-current={view === 'ladder' ? 'page' : undefined}
-          className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm hover:bg-raise aria-[current=page]:bg-jade-tint aria-[current=page]:text-jade">
-          <Chart /> How well it answers
+          className="rail w-full rounded-md px-2.5 py-2 text-left text-sm hover:bg-raise aria-[current=page]:bg-jade-tint aria-[current=page]:text-jade">
+          <span className="rail-text flex items-center gap-2.5"><Chart /> How well it answers</span>
         </button>
         <Settings />
       </div>
@@ -129,9 +129,9 @@ function Row({ chat, active, streaming, onOpen, onDeleted }: {
   return (
     <li ref={box} className="group relative">
       <button type="button" onClick={onOpen} aria-current={active ? 'page' : undefined}
-        className="flex w-full items-center gap-2 rounded-md py-2 pr-9 pl-2.5 text-left text-sm text-ink/85 transition-colors hover:bg-raise hover:text-ink aria-[current=page]:bg-raise aria-[current=page]:text-ink aria-[current=page]:shadow-[inset_2px_0_0_var(--color-jade)]">
+        className="rail flex w-full items-center gap-2 rounded-md py-2 pr-9 pl-2.5 text-left text-sm text-ink/85 hover:bg-raise hover:text-ink aria-[current=page]:bg-raise aria-[current=page]:text-ink">
         {streaming && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-jade" aria-label="Answering" />}
-        <span className="truncate">{chat.title}</span>
+        <span className="rail-text truncate">{chat.title}</span>
       </button>
       <button type="button" aria-label={`Options for ${chat.title}`} aria-expanded={menu} aria-haspopup="menu"
         onClick={() => setMenu((m) => !m)}
@@ -153,7 +153,7 @@ function Row({ chat, active, streaming, onOpen, onDeleted }: {
 function MenuItem({ icon, label, onClick, danger }: { icon: React.ReactNode; label: string; onClick: () => void; danger?: boolean }) {
   return (
     <button type="button" role="menuitem" onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm hover:bg-line ${danger ? 'text-refusal' : ''}`}>
+      className={`flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors hover:bg-line ${danger ? 'text-refusal' : ''}`}>
       {icon}{label}
     </button>
   )
@@ -166,7 +166,7 @@ export function ShowSidebar({ onClick, open }: { onClick: () => void; open?: boo
   return (
     <button type="button" onClick={onClick} aria-label={open ? 'Close the chat list' : 'Show the chat list'}
       aria-expanded={open}
-      className="rounded-md p-2 text-ink-soft hover:bg-raise hover:text-ink">
+      className="rounded-md p-2 text-ink-soft transition-colors hover:bg-raise hover:text-ink">
       {open ? <Close /> : <Panel />}
     </button>
   )

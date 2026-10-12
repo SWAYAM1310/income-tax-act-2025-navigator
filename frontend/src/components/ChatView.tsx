@@ -5,65 +5,12 @@ import { provisionFor, resolveMarkers, shortCite } from '../api'
 import { ask, stop, useLive } from '../ask'
 import type { Turn } from '../history'
 import { getChat, useChats } from '../history'
-import { ActStrip } from './ActMap'
 import { AnswerText } from './AnswerText'
 import type { ComposerHandle } from './Composer'
 import { Composer } from './Composer'
 import { Check, Copy, Loader, Reply } from './Icons'
 import { StatuteSheet } from './StatuteSheet'
-
-type Example = { q: string; why: string }
-
-// Questions from the v9 dev_mini eval set, verbatim (so their answers replay from cache; some
-// contain U+2011 hyphens), one pool per slot. Only questions v9 answered fully are listed.
-const EXAMPLES: Example[][] = [
-  [
-    { q: 'What is the meaning of "transfer" under the Income-tax Act, 2025?', why: 'A definition' },
-    { q: 'How does the Income-tax Act, 2025 define "regular assessment"?', why: 'A definition' },
-    { q: 'What deduction is allowed for an assessee whose gross total income includes business profits and gains, under section 63, when additional employee cost is incurred?', why: 'A provision' },
-    { q: 'What penalty is imposed for a transaction that directly or indirectly transfers management or control rights in an Indian concern?', why: 'A provision' },
-    { q: 'When an asset representing capital expenditure for promoting family planning is sold, how is the excess deduction treated under the Income‑tax Act, 2025?', why: 'Across provisions' },
-    { q: 'When a person sells an overseas tour program package, at what point must tax be collected under the Income‑tax Act, 2025?', why: 'Across provisions' },
-    { q: 'What constitutes a fixed place of business for a permanent establishment under the Income‑tax Act, 2025?', why: 'Across provisions' },
-    { q: 'If an assessee fails to furnish documents within the time specified in a notice under section 171(2), how long can the Assessing Officer extend the deadline for the assessee to comply?', why: 'Across provisions' },
-  ],
-  [
-    { q: 'Under section 393, what are the TDS rate and the threshold limit for payment on transfer of certain immovable property other than agricultural land: Any consideration for transfer of any immovable property (other than agricultural land) when paid by person, where the payee is a resident?', why: 'A rate table' },
-    { q: 'What is the rate of tax collection at source under section 394 on remittance under the liberalised remittance scheme of an amount or aggregate of the amounts exceeding ten lakh rupees—?', why: 'A rate table' },
-    { q: 'Under section 393, at what rate is tax deducted on Any income referred to in section 211 paid to a non-resident?', why: 'A rate table' },
-    { q: 'Under section 393, what are the TDS rate and the threshold limit for interest income: Any income by way of interest other than interest on securities when paid by (a) a banking company; or (b) a co-operative society carrying on the business of banking; or (c) a post office for a deposit made under a scheme notified by the central government, where the payee is a resident?', why: 'A rate table' },
-  ],
-  [
-    { q: 'How was section 99(2) amended by the Finance Act, 2026?', why: 'An amendment' },
-    { q: 'How was section 195(1)(i) amended by the Finance Act, 2026?', why: 'An amendment' },
-    { q: 'How was section 232(17) amended by the Finance Act, 2026?', why: 'An amendment' },
-    { q: 'How was section 263(6)(c)(i) amended by the Finance Act, 2026?', why: 'An amendment' },
-    { q: 'How was Schedule XIV, paragraph 4(3) amended by the Finance Act, 2026?', why: 'An amendment' },
-  ],
-  [
-    { q: 'How do I claim a refund that is stuck on the portal?', why: 'Outside the Act, so it is refused' },
-    { q: 'What does Rule 114 of the Income-tax Rules say about PAN applications?', why: 'Outside the Act, so it is refused' },
-    { q: 'Who is the current Chairman of the CBDT?', why: 'Outside the Act, so it is refused' },
-    { q: 'What did CBDT Circular No. 1 of 2026 clarify about TDS on salaries?', why: 'Outside the Act, so it is refused' },
-    { q: 'How did the Supreme Court decide the Vodafone indirect transfer case?', why: 'Outside the Act, so it is refused' },
-    { q: 'What does the Finance Bill, 2027 propose?', why: 'Outside the Act, so it is refused' },
-  ],
-]
-
-const SHOWN_KEY = 'statnav.examples'
-
-/** One example per slot, at random, never the one that slot showed on the previous visit. */
-function pickExamples(): Example[] {
-  let last: unknown = []
-  try { last = JSON.parse(localStorage.getItem(SHOWN_KEY) ?? '[]') } catch { /* first visit */ }
-  const prev = Array.isArray(last) ? last : []
-  const picks = EXAMPLES.map((pool, i) => {
-    const fresh = pool.filter((x) => x.q !== prev[i])
-    return fresh[Math.floor(Math.random() * fresh.length)]
-  })
-  try { localStorage.setItem(SHOWN_KEY, JSON.stringify(picks.map((x) => x.q))) } catch { /* no repeat check */ }
-  return picks
-}
+import { pickExamples } from '../examples'
 
 /** What each agent step did, in the reader's words. */
 function describe(s: Step): string | null {
@@ -102,6 +49,7 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
   const [open, setOpen] = useState<Open | null>(null)
   const thread = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
+  const [scrolled, setScrolled] = useState(false)
   const turns = chat?.turns ?? []
   const busy = !!live && live.chatId === chatId
 
@@ -126,15 +74,19 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
 
   return (
     <div className="relative flex h-dvh min-w-0 flex-1">
-      <div className={`flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-out ${open ? 'xl:mr-[min(44rem,44vw)]' : ''}`}>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line px-3">
+      <div className={`relative flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-out ${open ? 'xl:mr-[min(44rem,44vw)]' : ''}`}>
+        <header className={`absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-2 border-b bg-bg/70 px-3 backdrop-blur-md transition-colors duration-300 ${scrolled ? 'border-line' : 'border-transparent'}`}>
           {toolbar}
           <h1 className="m-0 truncate text-sm font-bold text-ink-soft">{chat?.title ?? 'New chat'}</h1>
         </header>
 
         <div ref={thread} className="flex-1 overflow-y-auto"
-          onScroll={(e) => { const el = e.currentTarget; stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80 }}>
-          <div className="mx-auto w-full max-w-[46rem] px-4 pt-8 pb-10 sm:px-6">
+          onScroll={(e) => {
+            const el = e.currentTarget
+            stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
+            setScrolled(el.scrollTop > 4)
+          }}>
+          <div className="mx-auto w-full max-w-[46rem] px-4 pt-22 pb-10 sm:px-6">
             {turns.length === 0 && <Empty onPick={(q) => onAsk(q)} />}
             {turns.map((t) => (
               <TurnView key={t.id} t={t} open={open} setOpen={setOpen} onAsk={busy ? null : onAsk} />
@@ -142,13 +94,9 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
           </div>
         </div>
 
-        <div className="shrink-0 bg-gradient-to-t from-bg via-bg to-transparent px-4 pt-2 pb-3 sm:px-6">
+        <div className="shrink-0 bg-gradient-to-t from-bg via-bg to-transparent px-4 pt-2 pb-4 sm:px-6">
           <div className="mx-auto max-w-[46rem]">
             <Composer ref={composer} busy={busy} elsewhere={!!live && !busy} onAsk={onAsk} onStop={stop} />
-            <p className="mt-2 mb-0 text-center text-xs text-ink-soft">
-              <strong className="text-refusal">Not tax advice.</strong> Each question is answered on its own from the Act's text,
-              and answers can be wrong. Read the cited provision before relying on one.
-            </p>
           </div>
         </div>
       </div>
@@ -167,17 +115,19 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
 function Empty({ onPick }: { onPick: (q: string) => void }) {
   const [examples] = useState(pickExamples)
   return (
-    <div className="rise pt-[8vh]">
-      <h2 className="m-0 font-serif text-[clamp(1.8rem,4vw,2.5rem)] leading-tight font-medium">What does the Act say?</h2>
-      <p className="mt-2 text-ink-soft">Ask about a definition, a rate in a table, or how a provision was amended in 2026.</p>
-      <p className="mt-8 mb-2 text-sm text-ink-soft">Try one of these</p>
-      <ul className="m-0 list-none border-t border-line p-0" aria-label="Example questions">
+    <div className="rise pt-[6vh]">
+      <h2 className="m-0 font-serif text-[clamp(2rem,4.5vw,2.8rem)] leading-[1.08] font-medium tracking-[-0.015em]">What does the Act say?</h2>
+      <p className="mt-3 max-w-[52ch] text-pretty text-ink-soft">Ask about a definition, a rate in a table, or how a provision was amended in 2026.</p>
+      <p className="mt-10 mb-2 text-sm text-ink-soft">Try one of these</p>
+      <ul className="m-0 -mx-4 list-none space-y-0.5 p-0" aria-label="Example questions">
         {examples.map((x) => (
-          <li key={x.q} className="border-b border-line">
+          <li key={x.q}>
             <button type="button" onClick={() => onPick(x.q)}
-              className="group block w-full py-3 text-left transition-colors">
-              <span className="line-clamp-2 font-serif text-[1.02rem] group-hover:text-jade">{x.q}</span>
-              <small className="mt-0.5 block text-xs text-ink-soft">{x.why}</small>
+              className="rail group block w-full rounded-lg px-4 py-3 text-left hover:bg-raise">
+              <span className="rail-text">
+                <span className="line-clamp-2 font-serif text-[1.05rem] transition-colors group-hover:text-jade">{x.q}</span>
+                <small className="mt-0.5 block text-xs text-ink-soft">{x.why}</small>
+              </span>
             </button>
           </li>
         ))}
@@ -204,15 +154,16 @@ function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
 
   return (
     <article className="mb-12" aria-label={t.question}>
-      <h3 className="m-0 border-l-2 border-jade pl-4 font-serif text-[1.3rem] leading-snug font-medium">{t.question}</h3>
+      <h3 className="m-0 font-serif text-[1.45rem] leading-snug font-medium tracking-[-0.01em]">{t.question}</h3>
 
       {lines.length > 0 && (
-        <ol className="mt-4 mb-0 list-none space-y-1 p-0 pl-4 text-sm text-ink-soft" aria-live="polite">
+        <ol className="mt-4 mb-0 ml-1 list-none space-y-1.5 border-l border-line p-0 pl-4 text-sm text-ink-soft" aria-live="polite">
           {lines.map((l, i) => {
             const current = streaming && i === lines.length - 1 && !t.text
             return (
-              <li key={i} className="fade flex items-center gap-2">
-                {current ? <Loader className="spin size-3.5 text-jade" /> : <Check className="size-3.5 text-jade-dim" />}
+              <li key={i} className="fade relative">
+                <span aria-hidden="true"
+                  className={`absolute top-[0.55em] -left-[20px] size-[7px] rounded-full ${current ? 'pulse-dot bg-jade' : 'bg-jade-dim'}`} />
                 <span className={current ? 'text-ink' : undefined}>{l}</span>
               </li>
             )
@@ -220,7 +171,7 @@ function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
         </ol>
       )}
       {streaming && lines.length === 0 && (
-        <p className="mt-4 mb-0 flex items-center gap-2 pl-4 text-sm text-ink-soft"><Loader className="spin size-3.5 text-jade" /> Reading the question</p>
+        <p className="mt-4 mb-0 flex items-center gap-2 text-sm text-ink-soft"><Loader className="spin size-3.5 text-jade" /> Reading the question</p>
       )}
 
       {(text || refused) && !(failed && !text) && (
@@ -245,7 +196,7 @@ function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
                 return (
                   <li key={c.chunk_id}>
                     <button type="button" aria-pressed={on} onClick={() => setOpen({ ...target, chunk: c.chunk_id })}
-                      className="rounded-full border border-transparent bg-jade-tint px-3 py-1 text-sm font-bold text-jade transition-colors hover:border-jade aria-pressed:border-jade">
+                      className="pill rounded-full bg-jade-tint px-3 py-1 text-sm font-bold text-jade aria-pressed:border-jade">
                       {shortCite(target.row ?? target.id)}
                       {c.page_start ? <span className="font-normal"> p. {c.page_start}</span> : null}
                     </button>
@@ -260,23 +211,21 @@ function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
 
           {!refused && !!a.follow_ups?.length && (
             <div className="mt-6">
-              <p className="m-0 mb-2 text-xs font-bold tracking-wide text-ink-soft uppercase">Ask next</p>
-              <ul className="m-0 flex list-none flex-col gap-1.5 p-0" aria-label="Suggested follow-up questions">
+              <p className="m-0 mb-1.5 text-sm text-ink-soft">Ask next</p>
+              <ul className="m-0 -mx-3 flex list-none flex-col gap-0.5 p-0" aria-label="Suggested follow-up questions">
                 {a.follow_ups.map((q) => (
                   <li key={q}>
                     <button type="button" disabled={!onAsk} onClick={() => onAsk?.(q)}
-                      className="group flex w-full items-start gap-2 rounded-lg border border-line px-3 py-2 text-left font-serif text-[1rem] transition-colors hover:border-jade hover:text-jade disabled:pointer-events-none disabled:opacity-50">
-                      <Reply className="mt-1 size-3.5 shrink-0 text-jade-dim group-hover:text-jade" />
-                      <span>{q}</span>
+                      className="rail group w-full rounded-lg px-3 py-2 text-left font-serif text-[1rem] hover:bg-raise hover:text-jade disabled:pointer-events-none disabled:opacity-50">
+                      <span className="rail-text flex items-start gap-2">
+                        <Reply className="mt-1 size-3.5 shrink-0 text-jade-dim transition-colors group-hover:text-jade" />
+                        <span>{q}</span>
+                      </span>
                     </button>
                   </li>
                 ))}
               </ul>
             </div>
-          )}
-
-          {!refused && t.evidence.length > 0 && (
-            <ActStrip passages={t.evidence.map((p) => p.chunk_id)} cited={a.citations.map((c) => c.chunk_id)} />
           )}
 
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
@@ -293,14 +242,14 @@ function TurnView({ t, open, setOpen, onAsk }: TurnProps) {
 
       {t.evidence.length > 0 && (
         <details className="evidence group mt-4 text-sm">
-          <summary className="cursor-pointer text-ink-soft hover:text-ink">Passages the answer was written from ({t.evidence.length})</summary>
+          <summary className="cursor-pointer text-ink-soft transition-colors hover:text-ink">Passages the answer was written from ({t.evidence.length})</summary>
           <div className="mt-2">
             {t.evidence.map((p) => {
               const target = provisionFor(p.chunk_id)
               return (
                 <div key={p.chunk_id} className="border-t border-line py-2.5">
                   <button type="button" onClick={() => setOpen({ ...target, chunk: p.chunk_id })}
-                    className="rounded-full bg-jade-tint px-2.5 py-0.5 text-xs font-bold text-jade hover:underline">
+                    className="pill rounded-full bg-jade-tint px-2.5 py-0.5 text-xs font-bold text-jade">
                     {p.label} {shortCite(target.row ?? target.id)}
                   </button>
                   <p className="mt-1.5 mb-0 line-clamp-3 font-serif text-ink-soft">{p.text}</p>
@@ -319,7 +268,7 @@ function CopyButton({ text }: { text: string }) {
   return (
     <button type="button"
       onClick={() => { void navigator.clipboard?.writeText(text).then(() => { setDone(true); setTimeout(() => setDone(false), 1500) }) }}
-      className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-raise hover:text-ink">
+      className="flex items-center gap-1 rounded px-1.5 py-0.5 transition-colors hover:bg-raise hover:text-ink">
       {done ? <Check className="size-3.5 text-jade" /> : <Copy className="size-3.5" />}{done ? 'Copied' : 'Copy'}
     </button>
   )

@@ -100,7 +100,7 @@ export function AnswerText({ text, evidence, streaming, open, onCite }: Props) {
             <section key={i} className="mt-6 flex gap-3 rounded-lg border border-line border-l-2 border-l-jade bg-raise px-4 py-3">
               <Bulb className="mt-1.5 size-4 shrink-0 text-jade" />
               <div className="min-w-0 flex-1 [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                <h4 className="m-0 font-sans text-xs font-bold tracking-wide text-jade uppercase">{s.heading}</h4>
+                <h4 className="m-0 font-sans text-sm font-bold text-jade">{s.heading}</h4>
                 {blocks(s.blocks)}
               </div>
             </section>
@@ -143,7 +143,7 @@ function Inline({ text, evidence, open, onCite }: { text: string; evidence: Pass
           <button type="button" aria-pressed={on} onClick={() => onCite({ ...target, chunk: p.chunk_id })}
             title={`${shortCite(target.row ?? target.id)}${p.page_start ? `, p. ${p.page_start}` : ''}`}
             aria-label={`Open ${shortCite(target.row ?? target.id)}`}
-            className="cite rounded px-0.5 font-sans text-[0.7em] font-bold text-jade hover:bg-jade-tint hover:underline aria-pressed:bg-jade-tint">
+            className="cite pill inline-block rounded px-0.5 font-sans text-[0.7em] font-bold text-jade hover:bg-jade-tint aria-pressed:bg-jade-tint">
             {label}
           </button>
         </sup>,
