@@ -1,0 +1,57 @@
+{
+  "n": 39,
+  "hit@1": 0.9062,
+  "hit@10": 1.0,
+  "hit@5": 1.0,
+  "mrr": 0.9531,
+  "recall@1": 0.8438,
+  "recall@10": 0.9688,
+  "recall@5": 0.9688,
+  "by_type": {
+    "amendment": {
+      "n": 5,
+      "hit@1": 1.0,
+      "hit@10": 1.0,
+      "hit@5": 1.0,
+      "mrr": 1.0,
+      "recall@1": 1.0,
+      "recall@10": 1.0,
+      "recall@5": 1.0
+    },
+    "lookup": {
+      "n": 9,
+      "hit@1": 0.8889,
+      "hit@10": 1.0,
+      "hit@5": 1.0,
+      "mrr": 0.9444,
+      "recall@1": 0.8889,
+      "recall@10": 1.0,
+      "recall@5": 1.0
+    },
+    "multi_hop": {
+      "n": 4,
+      "hit@1": 1.0,
+      "hit@10": 1.0,
+      "hit@5": 1.0,
+      "mrr": 1.0,
+      "recall@1": 0.5,
+      "recall@10": 0.75,
+      "recall@5": 0.75
+    },
+    "refusal": {
+      "n": 7
+    },
+    "table": {
+      "n": 14,
+      "hit@1": 0.8571,
+      "hit@10": 1.0,
+      "hit@5": 1.0,
+      "mrr": 0.9286,
+      "recall@1": 0.8571,
+      "recall@10": 1.0,
+      "recall@5": 1.0
+    }
+  },
+  "jina_tokens_mean": 0,
+  "incomplete": null
+}

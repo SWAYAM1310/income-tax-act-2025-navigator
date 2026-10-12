@@ -103,6 +103,27 @@ dev). The out-of-scope check, 1.00 / 1.00 on dev, refuses no answerable test que
 catches 14 of 16 out-of-scope ones. All versions in
 [`results/ladder.md`](results/ladder.md#final-numbers-frozen-test-split-n--84-retrieval-only).
 
+### Questions in plain language (the honest stress test)
+
+The golden set above uses the Act's own coordinates: 172 of its 222 questions name a section,
+quote the defined term or copy the gold text (`python -m evals.lay_lint`). A real user asks "I pay
+my landlord 60,000 a month, do I cut tax from the rent?". A separate **lay set** of 140 questions
+(86 everyday situations written by hand with gold found in the Act's text, 54 plain-language
+rewrites of dev questions with the same gold; written or reviewed by Claude, not a tax expert)
+measures that case. Top-5 recall on `lay_dev` (78 answerable questions):
+
+| | v0 | v2 | v3 / v5 | v6 / v8 |
+|---|---|---|---|---|
+| lay questions | 0.545 | **0.788** | 0.788 / 0.782 | 0.692 |
+| the same gold, original wording (32 pairs) | 0.484 | 0.781 | 0.969 | **0.969** |
+
+v9 end to end on `lay_mini` (30): facts found **0.708** (dev_mini 0.917), refusals right 0.67
+(1.00), amendment type 0.17 (1.00). The exact-id lookup behind v3-v8's gains needs a section
+number lay users never type; v6's scope check refuses 8 of 78 answerable lay questions as
+"personal advice" or "GST"; and the answer model refuses some of the rest. Details and the fix
+plan (a lay scope prompt, rewriting the question into the Act's vocabulary) are in
+[`results/ladder.md`](results/ladder.md#phase-15-lay-person-questions-how-much-of-the-ladder-survives-plain-language).
+
 ## How it works
 
 ```

@@ -109,19 +109,43 @@ def test_scope_fails_open_on_an_unparseable_reply():
     assert scope(FakeLLM("no idea"), "q").in_scope is True
 
 
+class FailingLLM:
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+    def chat(self, messages, json_mode=False, max_tokens=None):  # noqa: ARG002
+        raise self.exc
+
+
+def test_scope_fails_open_when_the_classifier_errors():
+    from statnav.llm.client import LLMError, QuotaExhausted
+
+    v = scope(FailingLLM(LLMError("openai/gpt-oss-20b 400: json_validate_failed")), "q")
+    assert v.in_scope is True and v.reason.startswith("classifier failed")
+    with pytest.raises(QuotaExhausted):  # running out of quota must still stop an eval run
+        scope(FailingLLM(QuotaExhausted("daily cap")), "q")
+
+
 CFG = {"chunks": "v2", "retrieval": {"mode": "hybrid", "k": 10}, "evidence_budget": 100,
        "agent": {"scope_check": True, "definitions": False}}
+
+
+class _Calls(list):
+    """The questions retrieval was called with; `.retrieve.rewrites` holds the last rewrites."""
 
 
 @pytest.fixture
 def fake_retrieval(monkeypatch):
     hits = [Hit("v2:s1", "s1", 0.9, "Section 1 text", 30, 1, 1, {"provisions": ["s1"]}),
             Hit("v2:s2", "s2", 0.8, "Section 2 text", 90, 2, 2, {"provisions": ["s2"]})]
-    calls = []
+    calls = _Calls()
 
-    def retrieve(conn, jina, question, cfg, k=None):  # noqa: ARG001
+    def retrieve(conn, jina, question, cfg, k=None, rewrites=None):  # noqa: ARG001
         calls.append(question)
+        retrieve.rewrites = rewrites
         return hits
+
+    calls.retrieve = retrieve
 
     monkeypatch.setattr(agent_graph, "retrieve", retrieve)
     return calls
@@ -229,3 +253,80 @@ def test_refused_answer_is_not_verified(fake_retrieval):
                                   ' "refused": true}'),
                           FakeLLM('{"in_scope": true}'), checker).run("q")
     assert "verify" not in r.steps and checker.calls == []
+
+
+# -- v10: one classifier call for scope, rewrites and kind -------------------------------------
+from statnav.agent.router import clean_queries, understand  # noqa: E402
+
+LAY_CFG = {**CFG, "agent": {"scope_check": "lay", "rewrite": True, "definitions": False}}
+
+
+def test_clean_queries_drops_provision_numbers_and_duplicates():
+    got = clean_queries(["capital gains exemption under section 54 on sale of a house",
+                         "Capital gains exemption under  section 54F on sale of a house",
+                         "deduction u/s 80C for life insurance premia", 7, "", "x"])
+    assert got == ["capital gains exemption under on sale of a house",
+                   "deduction for life insurance premia"]
+
+
+def test_understand_reads_scope_queries_and_kind():
+    u = understand(FakeLLM('{"category": "act", "reason": "rent TDS", "queries": ["tax deducted '
+                           'at source on rent"], "kind": "table"}'), "I pay rent; do I cut tax?")
+    assert (u.in_scope, u.queries, u.kind, u.tokens) == (
+        True, ["tax deducted at source on rent"], "table", 42)
+    assert understand(FakeLLM('{"category": "act", "kind": "weird"}'), "q").kind == "general"
+    out = understand(FakeLLM('{"category": "forms", "reason": "which ITR", "queries": ["x y z"]}'),
+                     "Which return form do I fill?")
+    assert not out.in_scope and out.reason == "forms: which ITR" and out.queries == []
+    assert understand(FakeLLM('{"category": "nonsense"}'), "q").in_scope  # fails open
+
+
+def test_understand_fails_open():
+    from statnav.llm.client import LLMError
+
+    u = understand(FailingLLM(LLMError("400 json_validate_failed")), "q")
+    assert u.in_scope and u.queries == [] and u.kind == "general"
+    assert understand(FakeLLM("not json"), "q").in_scope
+
+
+def test_lay_question_is_retrieved_with_its_rewrites_and_routed_by_kind(fake_retrieval):
+    clf = FakeLLM('{"category": "act", "queries": ["tax collected at source on overseas tour '
+                  'programme package"], "kind": "amendment"}')
+    r = agent_graph.Agent(None, None, LAY_CFG, None, clf).run(
+        "Did the 2026 budget change the tax on my foreign holiday package?", generate=False)
+    assert r.route == "amendment" and r.kind == "amendment"
+    assert fake_retrieval.retrieve.rewrites == [
+        "tax collected at source on overseas tour programme package"]
+
+
+def test_table_words_in_the_rewrite_pick_the_table_route(fake_retrieval):
+    clf = FakeLLM('{"category": "act", "queries": ["tax deducted at source on rent"], '
+                  '"kind": "general"}')
+    r = agent_graph.Agent(None, None, LAY_CFG, None, clf).run("I pay my landlord; cut tax?",
+                                                               generate=False)
+    assert r.route == "table"
+
+
+def test_a_question_that_names_a_provision_keeps_the_v9_path(fake_retrieval):
+    clf = FakeLLM('{"category": "act", "queries": ["something else"], "kind": "general"}')
+    r = agent_graph.Agent(None, None, LAY_CFG, None, clf).run(
+        "How was section 99(2) amended by the Finance Act, 2026?", generate=False)
+    assert r.route == "amendment" and r.rewrites == []
+    assert fake_retrieval.retrieve.rewrites == []
+
+
+def test_lay_scope_refusal_skips_retrieval(fake_retrieval):
+    clf = FakeLLM('{"category": "advice", "reason": "computes one taxpayer bill", '
+                  '"queries": [], "kind": "general"}')
+    r = agent_graph.Agent(None, None, LAY_CFG, FakeLLM(), clf).run("Work out my tax on 14 lakh")
+    assert r.steps == ["classify", "refuse"] and fake_retrieval == []
+
+
+def test_a_tds_question_filed_under_other_law_stays_in_scope():
+    u = understand(FakeLLM('{"category": "other_law", "reason": "asks about tax deducted at '
+                           'source on freelance fees", "queries": ["fees for professional '
+                           'services"]}'), "A company pays me fees. How much tax will they cut?")
+    assert u.in_scope and u.queries == ["fees for professional services"]
+    gst = understand(FakeLLM('{"category": "other_law", "reason": "GST on broadband"}'),
+                     "What's the GST on my broadband bill?")
+    assert not gst.in_scope

@@ -12,6 +12,12 @@
 - **tools**: on the definition route, the defining clause goes to rank 1 (`tools.Definitions`).
 - **pack** / **generate**: the same evidence packing, prompt and model as every other version
   (`statnav.answer`), so differences on the ladder come from the graph, not the prompt.
+- **v10** (`agent: {scope_check: lay, rewrite: true}`): classify makes one gpt-oss-20b call
+  (`router.understand`) that judges scope with a prompt written for lay questions, restates the
+  question in the Act's vocabulary, and names its kind. For a question that names no provision
+  and no defined term, retrieve also searches the rewrites, the kind picks the route (so "did the
+  2026 budget change ..." gets the amendment answer block), and a definition kind looks its term
+  up in the rewrite. Questions in the Act's own terms keep v9's path.
 - **verify** (v7, `agent: {verify: true}`): gpt-oss-20b maps each claim to its supporting
   passages (`verify.verify`); a claim with no support sends the answer back to `generate` once,
   with the claim named. `verify_citations: true` also replaces the answer's citations with that
@@ -31,13 +37,14 @@ from langchain_core.runnables import RunnableConfig  # noqa: TC002 - langgraph r
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, StateGraph
 
-from statnav.agent.router import route, scope
+from statnav.agent.router import TABLE_WORDS, route, scope, understand
 from statnav.agent.tools import Definitions, definition_hits
 from statnav.agent.verify import verify
 from statnav.answer import generate, pack, passages
 from statnav.llm.client import Reply  # noqa: TC001 - langgraph resolves State hints at runtime
 from statnav.obs.logging import get_logger
 from statnav.retrieve.amend import attach, style_of
+from statnav.retrieve.ids import provision_refs
 from statnav.retrieve.route import as_dicts, retrieve
 
 if TYPE_CHECKING:
@@ -59,6 +66,8 @@ class State(TypedDict, total=False):
     in_scope: bool
     scope_reason: str
     classify_tokens: int
+    rewrites: list[str]
+    kind: str
     hits: list[dict]
     evidence: list[dict]
     out: dict | None
@@ -92,6 +101,8 @@ class AgentResult:
     attempts: int = 0  # answer calls made (2 = the checker sent it back once)
     verified: bool | None = None  # None: not checked (v6, refused, or the check itself failed)
     unsupported: list[str] = field(default_factory=list)  # claims still unsupported at the end
+    rewrites: list[str] = field(default_factory=list)  # v10: the question in the Act's words
+    kind: str = ""  # v10: the classifier's kind (amendment / table / definition / general)
 
 
 class Agent:
@@ -137,14 +148,38 @@ class Agent:
         found = self.defs.find(q) if self.defs else []
         r = route(q, bool(found))
         defs = [p for _, pids in found for p in pids] if r == "definition" else []
-        in_scope, reason, used = True, "", 0
-        if self.opts.get("scope_check") and self.classify_llm is not None:
+        in_scope, reason, used, rewrites, kind = True, "", 0, [], ""
+        if self.opts.get("scope_check") == "lay" and self.classify_llm is not None:
+            u = understand(self.classify_llm, q)
+            in_scope, reason, used, kind = u.in_scope, u.reason, u.tokens, u.kind
+            # a question in the Act's own terms already has exact handles (ids, the term)
+            if self.opts.get("rewrite") and not provision_refs(q) and r != "definition":
+                rewrites = u.queries
+                r, found, defs = self._lay_route(r, kind, rewrites, found, defs)
+        elif self.opts.get("scope_check") and self.classify_llm is not None:
             v = scope(self.classify_llm, q)
             in_scope, reason, used = v.in_scope, v.reason, v.tokens
-        log.debug("agent_classify", route=r, in_scope=in_scope, terms=[t for t, _ in found])
+        log.debug("agent_classify", route=r, in_scope=in_scope, terms=[t for t, _ in found],
+                  rewrites=rewrites)
         return {"route": r, "terms": [t for t, _ in found], "definitions": defs,
                 "in_scope": in_scope, "scope_reason": reason, "classify_tokens": used,
+                "rewrites": rewrites, "kind": kind,
                 "steps": [*s.get("steps", []), "classify"]}
+
+    def _lay_route(self, r: str, kind: str, rewrites: list[str], found: list, defs: list):
+        """Route a plain-language question by the classifier's kind. The regex route only
+        sees the Act's words ("TDS", "amended" + a section); an amendment kind wins over the
+        table route, since a "did the budget change the rate" question needs *What changed*."""
+        if kind == "amendment" and r in ("general", "table"):
+            r = "amendment"
+        elif r == "general" and (kind == "table" or TABLE_WORDS.search(" ; ".join(rewrites))):
+            r = "table"
+        elif kind == "definition" and r == "general" and self.defs and rewrites:
+            hits = self.defs.find(" ; ".join(rewrites))
+            if hits:
+                r, found = "definition", hits
+                defs = [p for _, pids in hits for p in pids]
+        return r, found, defs
 
     def _refuse(self, s: State) -> State:
         reason = s.get("scope_reason") or "the question is outside the Income-tax Act, 2025"
@@ -153,7 +188,8 @@ class Agent:
                 "steps": [*s["steps"], "refuse"]}
 
     def _retrieve(self, s: State) -> State:
-        hits = as_dicts(retrieve(self.conn, self.jina, s["question"], self.cfg, s.get("k")))
+        hits = as_dicts(retrieve(self.conn, self.jina, s["question"], self.cfg, s.get("k"),
+                                 rewrites=s.get("rewrites")))
         return {"hits": hits, "steps": [*s["steps"], "retrieve"]}
 
     def _tools(self, s: State) -> State:
@@ -276,4 +312,5 @@ class Agent:
                            error=s.get("error"), answer_tokens=s.get("answer_tokens", 0),
                            verify_tokens=s.get("verify_tokens", 0),
                            attempts=s.get("attempts", 0), verified=s.get("verified"),
-                           unsupported=s.get("unsupported", []))
+                           unsupported=s.get("unsupported", []),
+                           rewrites=s.get("rewrites", []), kind=s.get("kind", ""))

@@ -15,8 +15,10 @@ from statnav.retrieve.hybrid import search as hybrid_search
 
 
 def retrieve(conn: psycopg.Connection, jina: JinaClient, question: str, cfg: dict,
-             k: int | None = None) -> list[Hit]:
-    """Top hits for `question` under the retrieval section of a version config."""
+             k: int | None = None, rewrites: list[str] | None = None) -> list[Hit]:
+    """Top hits for `question` under the retrieval section of a version config. `rewrites`
+    (v10, hybrid mode only): the question restated in the Act's vocabulary, searched densely
+    alongside it."""
     r = cfg["retrieval"]
     mode = r["mode"]
     version = cfg["chunks"]
@@ -30,6 +32,7 @@ def retrieve(conn: psycopg.Connection, jina: JinaClient, question: str, cfg: dic
             retrievers=r.get("retrievers", ()),
             weights=r.get("weights"),
             xref=r.get("xref"),
+            extra_qvecs=[jina.embed_query(t) for t in rewrites or []],
         )
     else:
         raise ValueError(f"retrieval mode {mode!r} has no chat/eval path")

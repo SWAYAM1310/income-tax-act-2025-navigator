@@ -435,6 +435,91 @@ mark) and two or three `follow_ups`. It answers with its own model role, `answer
 - Cost: ~175K gpt-oss-120b tokens on 2026-10-10 (tuning, the UI fixture and two dev_mini passes,
   the second only re-asking the 6 amendment questions).
 
+## Phase 15: lay-person questions (how much of the ladder survives plain language)
+
+A review of this repo pointed out that the golden set flatters the design: most questions use
+the Act's own coordinates. `python -m evals.lay_lint` measures it: **172 of 222 golden questions
+fail a lay-question lint** (145 name a section or Schedule, 34 quote the defined term, 58 copy a
+run of 5+ content words from the gold text). Real users ask "I pay my landlord 60,000 a month, do
+I cut tax from the rent?", which names nothing. So the `ids` / `under` retrievers and the
+definitions tool, which drive v3-v8's gains, mostly never fire for them.
+
+**The lay set** (`evals/data/lay.jsonl`, built by `evals/build/lay.py`), 140 accepted questions:
+- **86 situations**, hand-written (`evals/build/lay_situations.py`): salary, rent, home loans, TDS/TCS on everyday
+  payments, selling a flat or shares, gifts, farm income, deductions, advance tax, late fees,
+  refunds, the 2026 changes a taxpayer would notice, and 15 refusals that stay refusals
+  (computing my tax, pick-for-me advice, forms, the portal, my notice, GST, stamp duty...). Gold
+  provisions were found by reading the Act's headings and text, **not by running the
+  retriever**, so the gold is not biased toward what the system already finds.
+- **69 paraphrases** of *dev* golden questions by gpt-oss-20b (test questions are never
+  paraphrased), same gold labels; 54 accepted (15 rejected: jargon a lay user would not use,
+  or the rewrite changed the meaning), 18 of those reworded by hand.
+- Every row passes the lint and every gold fact occurs verbatim in its gold text (tested in
+  `tests/test_lay.py`). All decisions are in `verification_log.csv` with reviewer `claude`: the
+  set was written or reviewed by Claude against the Act's text, **not checked by a tax expert**.
+- Splits by id hash: `lay_dev` 95, `lay_test` 45 (**frozen**, `lay_test.sha256`, before any
+  version is tuned on lay questions), `lay_mini` 30 (6 per type), `lay_orig` = the golden
+  originals of the 32 answerable lay_dev paraphrases. `dev`, `test` and `dev_mini` are untouched.
+
+### Retrieval, lay_dev (78 answerable questions), recall@5 / MRR / hit@1
+
+| | v0 | v2 | v3 | v5 | v6 / v8 |
+|---|---|---|---|---|---|
+| all lay questions | 0.545 / 0.472 / 0.372 | **0.788** / 0.683 / 0.577 | 0.788 / 0.683 / 0.577 | 0.782 / 0.686 / 0.577 | 0.692 / 0.603 / 0.500 |
+| situations (46) | 0.663 / 0.585 / 0.478 | 0.804 / 0.703 / 0.609 | 0.804 / 0.703 / 0.609 | 0.783 / 0.709 / 0.609 | 0.696 / 0.622 / 0.522 |
+| paraphrases (32) | 0.375 / 0.311 / 0.219 | 0.766 / 0.653 / 0.531 | 0.766 / 0.653 / 0.531 | 0.781 / 0.653 / 0.531 | 0.688 / 0.575 / 0.469 |
+| **same 32, original wording** | 0.484 / 0.401 / 0.312 | 0.781 / 0.741 / 0.688 | 0.969 / 0.953 / 0.906 | 0.969 / 0.953 / 0.906 | **0.969 / 0.969 / 0.938** |
+| scope: answerable refused | | | | | **8 / 78** |
+| scope: refusals caught | | | | | 17 / 17 |
+
+- **On the same gold, lay wording costs v8 0.28 recall@5 and 0.39 MRR** (0.969 → 0.688,
+  0.969 → 0.575). The originals' 0.969 is mostly the id lookup: v2, without it, scores 0.781 on
+  them.
+- **Everything after v2 is worth nothing on lay questions, and v6's scope check makes them
+  worse.** v3/v5 equal v2 (no provision is named, so nothing is looked up). v6/v8 drop to 0.692
+  because the scope check refuses 8 of 78 answerable questions before retrieval: first-person
+  questions read as "personal tax advice" (freelancer TDS, a late fee "my income is about 4
+  lakh", the average rate "I pay"), and TCS read as GST or "sales tax" (car dealers, tour
+  operators). On the 70 it lets through, v8 is 0.771 against v2's 0.764 on the same questions:
+  the definitions tool fired on 3 of 70, and 62 of 70 took the `general` route.
+- **What is left is a vocabulary gap.** Of the 21 misses, typical ones are "notional rent" (the
+  Act: *annual value*, s21(6)), "money I can't explain" (*unexplained* income, s195), "tax bill is
+  small" (advance tax "Rs. 10000 or more", s404), "shares held about 2 years" (the 12.5% in
+  s197(1) loses to s214's non-resident table), "who is the officer who examines my return"
+  (*Assessing Officer*, s2(12)).
+- **A crash found on the way (fixed):** on one lay question ("I'm sending more than 10 lakh
+  abroad...") gpt-oss-20b's scope check returned no JSON at all (Groq 400
+  `json_validate_failed`), and `router.scope` let the error through, which stopped the eval run
+  and would have failed the live API's answer. A classifier `LLMError` now fails open, like an
+  unparseable verdict; `QuotaExhausted` still propagates (`tests/test_agent.py`).
+
+### End-to-end, v9 on lay_mini (n = 30) against dev_mini
+
+| | Fact rec. | Exact | Cite prec. | Cite rec. | Grounded | Table exact | Amend. type | Refusal P / R | recall@5 | LLM tok/q |
+|---|---|---|---|---|---|---|---|---|---|---|
+| v9, dev_mini | 0.917 | 0.736 | 0.868 | 0.958 | 1.000 | 1.000 | 1.000 | 1.00 / 1.00 | 0.896 | 3,835 |
+| **v9, lay_mini** | **0.708** | 0.479 | **0.479** | 0.750 | 0.958 | 0.833 | **0.167** | **0.67 / 1.00** | 0.708 | 4,172 |
+
+- **The generator refuses answerable lay questions too.** The scope check let all 24 answerable
+  lay_mini questions through, but the answer model refused 3 ("What does the Income-tax Act call
+  interest?", "I grow wheat ... is the money from selling the crops taxed?", "My mother is 62 and
+  lives on FD interest..."), each time with the gold provision partly retrieved.
+- **Amendment type 0.167 is a routing gap, not a retrieval one** (amendment recall@5 is 1.00):
+  `route()` picks the amendment route only when the question names a provision, so a lay "did
+  the 2026 budget change ..." question never gets v9's *What changed* block, and its answers say
+  "raised" or "changed" without naming the change type.
+- Citation precision 0.479 partly reflects narrow gold: a situation's gold is usually one
+  provision, while the answer also cites the neighbouring ones it used.
+- Cost: ~113K gpt-oss-120b tokens (one pass) and ~98K gpt-oss-20b tokens (drafting, scope
+  checks) on 2026-10-12; Jina ~2.4K tokens (95 new query embeddings).
+
+**Conclusion for Phase 16:** the system is a good statute lookup tool and a much weaker lay
+advisor. The fixes in order: a lay scope prompt (first-person questions about what the Act says
+are in scope), rewriting the question into the Act's vocabulary before retrieval (without
+section numbers, which a 20b model would take from the 1961 Act), and routing on the rewrite so
+amendment and table questions get their answer blocks. Tuned on `lay_dev` only; `lay_test` is
+frozen for the final check.
+
 ## Final numbers: frozen test split (n = 84, retrieval only)
 
 The test split was frozen by checksum in Phase 3 and run once, at the end, with `--final`

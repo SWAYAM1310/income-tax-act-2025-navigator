@@ -243,8 +243,13 @@ def slot_merge(base: list[Hit], extra: list[Hit], *, keep: int, slots: int,
 
 def search(conn: psycopg.Connection, qvec: np.ndarray, query: str, version: str,
            k: int = 10, *, pool: int = 30, retrievers: tuple[str, ...] | list[str] = (),
-           weights: dict | None = None, xref: dict | None = None) -> list[Hit]:
+           weights: dict | None = None, xref: dict | None = None,
+           extra_qvecs: tuple[np.ndarray, ...] | list[np.ndarray] = ()) -> list[Hit]:
     """Fuse the enabled retrievers with RRF, then optionally expand by cross-reference.
+
+    `extra_qvecs` (v10) are embeddings of the question rewritten in the Act's vocabulary; each
+    adds one dense list to the fusion, weighted `weights["rewrite"]`. The id lookups and the
+    cross-reference expansion still use the original question.
 
     `pool` is how deep each retriever goes before fusion; `k` is how many survive it. The ids
     weight is insensitive in practice (1.0 to 5.0 all scored 0.887 on dev): exact id hits are
@@ -253,7 +258,7 @@ def search(conn: psycopg.Connection, qvec: np.ndarray, query: str, version: str,
     `xref` ({seed_n, keep, slots, both_ways}) adds a second stage: the top `seed_n` fused hits
     seed a one-hop cross-reference expansion (`xref_hits`), merged with `slot_merge`.
     """
-    w = {"dense": 1.0, "fts": 1.0, "ids": 1.0, "under": 1.0, **(weights or {})}
+    w = {"dense": 1.0, "fts": 1.0, "ids": 1.0, "under": 1.0, "rewrite": 1.0, **(weights or {})}
     want = tuple(retrievers) or DEFAULT_RETRIEVERS
     sources = {
         "dense": lambda: knn(conn, qvec, version, pool),
@@ -264,9 +269,11 @@ def search(conn: psycopg.Connection, qvec: np.ndarray, query: str, version: str,
     unknown = set(want) - set(sources)
     if unknown:
         raise ValueError(f"unknown retrievers: {sorted(unknown)}")
+    lists = [(sources[name](), w[name]) for name in want]
+    lists += [(knn(conn, v, version, pool), w["rewrite"]) for v in extra_qvecs]
     if not xref:
-        return rrf([(sources[name](), w[name]) for name in want], k=k)
-    base = rrf([(sources[name](), w[name]) for name in want], k=pool)
+        return rrf(lists, k=k)
+    base = rrf(lists, k=pool)
     extra = xref_hits(conn, base[: xref.get("seed_n", 3)], version, qvec, pool,
                       both_ways=xref.get("both_ways", True))
     return slot_merge(base, extra, keep=xref.get("keep", 3), slots=xref.get("slots", 2), k=k)

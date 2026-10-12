@@ -59,6 +59,116 @@ oddly worded questions about the Act are in scope. If unsure, answer in scope.
 Return only JSON: {"in_scope": true, "reason": "<one short sentence>"}"""
 
 
+#: v10: the scope check and a rewrite of the question in one gpt-oss-20b call. Measured on the lay
+#: set (Phase 15): SCOPE_PROMPT refused 8 of 78 answerable lay questions, reading first-person
+#: questions as "personal tax advice" and tax collected at source as GST; and lay wording misses
+#: the Act's vocabulary ("notional rent" for annual value), which no id lookup can fix.
+UNDERSTAND_PROMPT = """You screen and rephrase questions for a search tool over India's \
+Income-tax Act, 2025 (as amended by the Finance Act, 2026). Most users are ordinary taxpayers \
+describing their own situation in everyday words. You have NOT seen the Act's text, so never \
+decide whether the Act defines, contains or specifies something: a later step checks that.
+
+1. Category. Pick exactly one:
+- "forms": which return form to file, Income-tax Rules, CBDT circulars or notifications;
+- "courts": a court or tribunal decision;
+- "other_law": GST, stamp duty, company or tenancy law, treaties, foreign tax. NOT tax deducted \
+or collected at source (TDS/TCS): that is income tax, even when a car dealer, travel agent, bank \
+or buyer collects it;
+- "own_case": using the e-filing portal, or the user's own notice, refund status or dispute;
+- "current_facts": today's interest rates, people, statistics, or a future budget;
+- "advice": working out one person's tax bill, or choosing for them (which regime or investment \
+is better, whether a plan is a good idea);
+- "act": anything else, including what the Act says about the user's own situation ("I pay rent \
+of 60,000 a month, do I have to cut tax?", "I'm 70, do I pay advance tax?", "what late fee will I \
+pay?"). If unsure, pick "act".
+
+2. Queries. For "act", write 1 or 2 short search queries that restate the question in the Act's \
+own legal vocabulary. Name the specific payment, income, asset or person the user means, in the \
+Act's words, not just the general topic (e.g. "annual value of house property occupied by the \
+owner for his own residence", "consideration for transfer of a virtual digital asset", "fees \
+for professional services paid to a resident", "deduction for interest on deposits in a \
+savings account", "income not included in total income: agricultural income"). Never write a \
+section, Schedule, clause or serial number.
+
+3. Kind: "amendment" if it asks what changed in 2026 or in the budget; "table" if it asks for a \
+rate, threshold, slab, or an amount deducted or collected at source; "definition" only if it \
+asks what a particular word or phrase means; otherwise "general".
+
+Return only JSON: {"category": "act", "reason": "<one short sentence>", "queries": ["..."], \
+"kind": "general"}"""
+
+#: v10's out-of-scope categories; `in_scope` is derived in code, because the first version asked
+#: for a bare `in_scope` and gpt-oss-20b answered true while its own reason said "asks which return
+#: form to file" (4 of 17 lay refusals let through on lay_dev)
+CATEGORIES = ("forms", "courts", "other_law", "own_case", "current_facts", "advice", "act")
+_AT_SOURCE = re.compile(r"\b(?:TDS|TCS|(?:deducted|collected) at source|tax (?:deduction|"
+                        r"collection) at source)\b", re.I)
+KINDS = ("amendment", "table", "definition", "general")
+#: a rewrite in the Act's words that asks for a table's numbers (the 20b model often calls these
+#: "general", and `_TABLE` only knows the abbreviations)
+TABLE_WORDS = re.compile(r"\b(?:deducted at source|collected at source|rates?|threshold|slab)\b",
+                         re.I)
+#: room for gpt-oss-20b's reasoning plus the longer JSON (the classify role's 400 is too tight)
+UNDERSTAND_MAX_TOKENS = 700
+#: a provision number anywhere in a rewrite: the 20b model knows the Income-tax Act, 1961's
+#: numbering ("section 54", "section 80C"), which would send the id lookup to the wrong provision
+_NUMBERED = re.compile(
+    r"\b(?:u/s|sections?|schedules?|sub-sections?|clauses?|paragraphs?|rules?)\s*"
+    r"[\dIVXL]+[A-Z]{0,3}(?:\s*\([0-9a-zA-Z]{1,4}\))*|\b\d{2,3}[A-Z]{1,3}\b", re.I)
+
+
+@dataclass
+class Understanding:
+    in_scope: bool
+    reason: str
+    queries: list[str]
+    kind: str
+    tokens: int
+    cached: bool
+
+
+def clean_queries(raw: object) -> list[str]:
+    """At most two distinct search queries, with any provision number removed."""
+    out: list[str] = []
+    for q in raw if isinstance(raw, list) else []:
+        if not isinstance(q, str):
+            continue
+        q = re.sub(r"\s+", " ", _NUMBERED.sub(" ", q)).strip(" ,;:-")[:200]
+        if len(q) > 3 and q.lower() not in (x.lower() for x in out):
+            out.append(q)
+    return out[:2]
+
+
+def understand(llm: ChatClient, question: str) -> Understanding:
+    """v10's classifier: scope, Act-vocabulary search queries and the question's kind, in one
+    call. Fails open like `scope`; `QuotaExhausted` propagates."""
+    try:
+        reply = llm.chat([{"role": "system", "content": UNDERSTAND_PROMPT},
+                          {"role": "user", "content": question}], json_mode=True,
+                         max_tokens=UNDERSTAND_MAX_TOKENS)
+    except LLMError as exc:
+        return Understanding(True, f"classifier failed: {str(exc)[:80]}", [], "general", 0, False)
+    tokens = reply.usage.get("total_tokens") or 0
+    try:
+        out = reply.json()
+    except (LLMError, ValueError):
+        return Understanding(True, "classifier reply was not JSON", [], "general", tokens,
+                             reply.cached)
+    kind = out.get("kind") if out.get("kind") in KINDS else "general"
+    category = out.get("category")
+    reason = str(out.get("reason") or "")
+    # the prompt says TDS/TCS is income tax, yet gpt-oss-20b still filed "tax deducted at source
+    # on freelance fees" under other_law (lay_dev); a TDS/TCS question is never other law
+    if category == "other_law" and _AT_SOURCE.search(f"{question} {reason}"):
+        category = "act"
+    # an unknown or missing category fails open
+    in_scope = category not in CATEGORIES or category == "act"
+    if not in_scope:
+        reason = f"{category}: {reason}" if reason else str(category)
+    return Understanding(in_scope, reason, clean_queries(out.get("queries")) if in_scope else [],
+                         kind, tokens, reply.cached)
+
+
 @dataclass
 class Scope:
     in_scope: bool
@@ -68,9 +178,18 @@ class Scope:
 
 
 def scope(llm: ChatClient, question: str) -> Scope:
-    """Ask the classifier whether the Act can answer `question`. Errors propagate."""
-    reply = llm.chat([{"role": "system", "content": SCOPE_PROMPT},
-                      {"role": "user", "content": question}], json_mode=True)
+    """Ask the classifier whether the Act can answer `question`.
+
+    A classifier failure fails open, like an unparseable verdict: on some lay questions
+    gpt-oss-20b produces no JSON at all (Groq 400 `json_validate_failed`), and refusing to answer
+    because the screen broke would be worse than letting the generator decide. Running out of
+    quota (`QuotaExhausted`, not an `LLMError`) still propagates.
+    """
+    try:
+        reply = llm.chat([{"role": "system", "content": SCOPE_PROMPT},
+                          {"role": "user", "content": question}], json_mode=True)
+    except LLMError as exc:
+        return Scope(True, f"classifier failed: {str(exc)[:80]}", 0, False)
     tokens = reply.usage.get("total_tokens") or 0
     try:
         out = reply.json()

@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 
 from evals.common import (
     CANDIDATES,
+    DATA_DIR,
     GOLDEN,
     RESULTS_DIR,
     SPLITS_DIR,
@@ -42,18 +43,26 @@ from statnav.embed import tokens
 from statnav.obs.logging import get_logger
 
 log = get_logger("evals.run")
+LAY = DATA_DIR / "lay.jsonl"
 
 
 def load_questions(split: str, final: bool) -> list[dict]:
-    """Questions of a split. `<split>:<type>` keeps one question type (`dev:amendment`), and
+    """Questions of a split. `<split>:<type>` keeps one question type (`dev:amendment`),
     `<split>:substitution` the amendment questions whose endnote quotes the replaced words --
-    the ones `amendment_direction` can score. Their results go to `<split>_<filter>/`."""
+    the ones `amendment_direction` can score -- and, on the lay splits, `<split>:<style>`
+    (`paraphrase`, `situation`) or `<split>:<person>` (`first`, `third`). Results go to
+    `<split>_<filter>/`. The lay splits (`lay_dev`, `lay_mini`, `lay_test`) read
+    `evals/data/lay.jsonl`; `lay_orig` is the golden originals of the lay_dev paraphrases."""
     if ":" in split:
         base, keep = split.split(":", 1)
         qs = load_questions(base, final)
         if keep == "substitution":
             from evals.metrics import substitution_pair
             return [q for q in qs if substitution_pair(q)]
+        if keep in ("paraphrase", "situation"):
+            return [q for q in qs if q.get("style") == keep]
+        if keep in ("first", "third"):
+            return [q for q in qs if q.get("person") == keep]
         return [q for q in qs if q["type"] == keep]
     if split == "candidates":
         return [c for c in read_jsonl(CANDIDATES) if c["status"] != "rejected"]
@@ -61,19 +70,21 @@ def load_questions(split: str, final: bool) -> list[dict]:
         ids = (CANDIDATES.parent / "smoke_ids.txt").read_text(encoding="utf-8").split()
         by_id = {c["id"]: c for c in read_jsonl(CANDIDATES)}
         return [by_id[i] for i in ids if i in by_id]
-    if split == "test" and not final:
-        raise SystemExit("the test split is for reported numbers only: pass --final")
-    if split == "test":
+    if split in ("test", "lay_test") and not final:
+        raise SystemExit(f"the {split} split is for reported numbers only: pass --final")
+    if split in ("test", "lay_test"):
         from evals.splits import SPLITS_DIR as _S
         from evals.splits import test_digest
-        frozen = (_S / "test.sha256").read_text(encoding="utf-8").strip()
-        if test_digest((_S / "test.ids").read_text(encoding="utf-8").split()) != frozen:
-            raise SystemExit("test.ids no longer matches the frozen test.sha256; refusing to run")
+        frozen = (_S / f"{split}.sha256").read_text(encoding="utf-8").strip()
+        if test_digest((_S / f"{split}.ids").read_text(encoding="utf-8").split()) != frozen:
+            raise SystemExit(f"{split}.ids no longer matches the frozen {split}.sha256; "
+                             "refusing to run")
     path = SPLITS_DIR / f"{split}.ids"
     if not path.exists():
         raise SystemExit(f"{path} missing: verify questions (evals.review), then evals.splits")
     ids = path.read_text(encoding="utf-8").split()
-    golden = {q["id"]: q for q in read_jsonl(GOLDEN)}
+    source = LAY if split in ("lay_dev", "lay_mini", "lay_test") else GOLDEN
+    golden = {q["id"]: q for q in read_jsonl(source)}
     return [golden[i] for i in ids if i in golden]
 
 
@@ -147,6 +158,8 @@ def run(version: str, split: str, retrieval_only: bool, final: bool, limit: int 
             hits = res.hits
             rec.update(route=res.route, in_scope=res.in_scope, scope_reason=res.scope_reason,
                        classify_tokens=res.classify_tokens, definitions=res.definitions)
+            if res.rewrites or res.kind:
+                rec.update(rewrites=res.rewrites, kind=res.kind)
             rec["metrics"]["scope_refused"] = float(not res.in_scope)
         else:
             hits = as_dicts(retrieve(conn, jina, q["question"], cfg))
