@@ -132,6 +132,12 @@ html[data-motion='reduced']::view-transition-new(*) { animation: none !important
 }
 @keyframes sheen { to { transform: translateX(130%); } }
 
+/* the chat thread fades out under the top bar (3.5rem) and above the question box, so text
+   scrolling past either edge dissolves instead of being cut or showing through */
+.thread-fade {
+  mask-image: linear-gradient(to bottom, transparent 3.5rem, #000 6rem, #000 calc(100% - 2.5rem), transparent);
+}
+
 /* ---- welcome -> chat (App.tsx askFromWelcome, a view transition) ---------------------------
    The question box glides to the chat's composer, the question flies to the heading the answer
    starts under, the welcome page sinks away and the chat page, its sidebar and header arrive. */

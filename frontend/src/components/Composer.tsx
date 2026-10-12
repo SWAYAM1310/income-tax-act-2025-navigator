@@ -44,7 +44,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ bu
 
   return (
     <form className="relative" style={name ? { viewTransitionName: name } : undefined} onSubmit={(e) => { e.preventDefault(); submit() }}>
-      <div className={`flex items-end gap-2 rounded-[1.4rem] border border-line-strong bg-panel/85 p-2 shadow-[0_18px_50px_-20px_rgb(0_0_0/0.9)] backdrop-blur-md transition-[border-color,box-shadow] duration-300 hover:border-jade-dim focus-within:border-jade focus-within:shadow-[0_0_0_4px_var(--color-jade-glow),0_18px_50px_-20px_rgb(0_0_0/0.9)] ${hero ? 'pl-5' : 'pl-4'}`}>
+      <div className={`flex items-end gap-2 rounded-[1.4rem] border border-line-strong bg-panel/85 p-2 shadow-[0_18px_50px_-20px_rgb(0_0_0/0.9)] backdrop-blur-md transition-[border-color,box-shadow] duration-300 hover:border-jade-dim focus-within:border-jade focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--color-jade)_16%,transparent),0_18px_50px_-20px_rgb(0_0_0/0.9)] ${hero ? 'pl-5' : 'pl-4'}`}>
         <label htmlFor="q" className="sr-only">Ask about the Act</label>
         <textarea
           id="q" ref={box} rows={1} value={q}

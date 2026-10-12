@@ -75,18 +75,18 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
   return (
     <div className="relative flex h-dvh min-w-0 flex-1">
       <div className={`relative flex min-w-0 flex-1 flex-col transition-[margin] duration-300 ease-out ${open ? 'xl:mr-[min(44rem,44vw)]' : ''}`}>
-        <header style={{ viewTransitionName: 'chat-header' }} className={`absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-2 border-b bg-bg/70 px-3 backdrop-blur-md transition-colors duration-300 ${scrolled ? 'border-line' : 'border-transparent'}`}>
+        <header style={{ viewTransitionName: 'chat-header' }} className={`absolute inset-x-0 top-0 z-10 flex h-14 items-center gap-2 border-b bg-bg px-3 transition-colors duration-300 ${scrolled ? 'border-line' : 'border-transparent'}`}>
           {toolbar}
           <h1 className="m-0 truncate text-sm font-bold text-ink-soft">{chat?.title ?? 'New chat'}</h1>
         </header>
 
-        <div ref={thread} className="flex-1 overflow-y-auto"
+        <div ref={thread} className="thread-fade flex-1 overflow-y-auto"
           onScroll={(e) => {
             const el = e.currentTarget
             stick.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80
             setScrolled(el.scrollTop > 4)
           }}>
-          <div className="mx-auto w-full max-w-[46rem] px-4 pt-22 pb-10 sm:px-6">
+          <div className="mx-auto w-full max-w-[46rem] px-4 pt-24 pb-14 sm:px-6">
             {turns.length === 0 && <Empty onPick={(q) => onAsk(q)} />}
             {turns.map((t, i) => (
               <TurnView key={t.id} t={t} first={i === 0} open={open} setOpen={setOpen} onAsk={busy ? null : onAsk} />
@@ -94,7 +94,7 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
           </div>
         </div>
 
-        <div className="shrink-0 bg-gradient-to-t from-bg via-bg to-transparent px-4 pt-2 pb-4 sm:px-6">
+        <div className="shrink-0 px-4 pt-1 pb-4 sm:px-6">
           <div className="mx-auto max-w-[46rem]">
             <Composer ref={composer} name="composer" busy={busy} elsewhere={!!live && !busy} onAsk={(q) => onAsk(q)} onStop={stop} />
           </div>
@@ -155,7 +155,7 @@ function TurnView({ t, first, open, setOpen, onAsk }: TurnProps) {
   const text = a && !a.error ? a.answer : t.text
 
   return (
-    <article className="mb-12" aria-label={t.question}>
+    <article className={first ? 'mb-14' : 'mb-14 border-t border-line pt-12'} aria-label={t.question}>
       <h3 style={first ? { viewTransitionName: 'question' } : undefined} className="m-0 font-serif text-[1.45rem] leading-snug font-medium tracking-[-0.01em]">{t.question}</h3>
 
       {lines.length > 0 && (
@@ -230,22 +230,26 @@ function TurnView({ t, first, open, setOpen, onAsk }: TurnProps) {
             </div>
           )}
 
+          {(!refused || !a.evidence_tokens) && (
           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-ink-soft">
             {!refused && <CopyButton text={resolveMarkers(a.answer, t.evidence) + (a.citations.length ? `\n\nCited: ${a.citations.map((c) => shortCite(provisionFor(c.chunk_id).row ?? provisionFor(c.chunk_id).id)).join('; ')}` : '')} />}
-            <span>
-              {refused && !a.evidence_tokens ? 'Refused before reading the Act'
-                : a.cached ? 'Answered from cache' : `${a.llm_tokens.toLocaleString()} answer tokens`}
-              {a.evidence_tokens ? `, from ${a.evidence_tokens.toLocaleString()} tokens of the Act` : ''}
-              {a.route ? `. Route: ${a.route}.` : '.'}
-            </span>
+            {refused && <span>Refused before reading the Act.</span>}
           </div>
+          )}
         </>
       )}
 
       {t.evidence.length > 0 && (
         <details className="evidence group mt-4 text-sm">
-          <summary className="cursor-pointer text-ink-soft transition-colors hover:text-ink">Passages the answer was written from ({t.evidence.length})</summary>
+          <summary className="cursor-pointer text-ink-soft transition-colors hover:text-ink">The {t.evidence.length} passages it was written from</summary>
           <div className="mt-2">
+            {a && !a.error && (
+              <p className="m-0 mb-2 text-xs text-ink-soft">
+                {a.cached ? 'Answered from cache' : `${a.llm_tokens.toLocaleString()} answer tokens`}
+                {a.evidence_tokens ? `, from ${a.evidence_tokens.toLocaleString()} tokens of the Act` : ''}
+                {a.route ? `. Route: ${a.route}.` : '.'}
+              </p>
+            )}
             {t.evidence.map((p) => {
               const target = provisionFor(p.chunk_id)
               return (
