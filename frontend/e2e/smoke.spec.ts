@@ -166,6 +166,31 @@ test.describe('chat', () => {
     await expect(page.getByText('Stopped before the answer was finished.')).toBeVisible()
   })
 
+  test('a question asked while another chat is answering waits its turn instead of vanishing', async ({ page }) => {
+    let release!: () => void
+    const held = new Promise<void>((r) => { release = r })
+    await page.route('**/api/query', async (route) => {
+      const q = JSON.parse(route.request().postData() ?? '{}').question as string
+      if (!q.includes('slow')) { await route.fallback(); return }
+      await held
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: fixture('query-refusal.sse') })
+    })
+    await page.getByRole('textbox', { name: 'Ask about the Act' }).fill('A slow question about the Act')
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('button', { name: 'Stop' })).toBeVisible()
+
+    // back to the welcome page while that answer is still coming, and ask there
+    await page.evaluate(() => { window.location.hash = '#/welcome' })
+    await page.getByRole('textbox', { name: 'Ask about the Act' }).fill('How was section 99(2) amended by the Finance Act, 2026?')
+    await page.keyboard.press('Enter')
+    const waiting = page.getByRole('article', { name: AMENDMENT })
+    await expect(waiting).toContainText('Waiting for the answer in another chat to finish')
+
+    release()
+    await expect(waiting).toContainText('(1)(a)(ii) or (b)')
+    await expect(waiting).not.toContainText('Waiting for the answer')
+  })
+
   test('refuses a question outside the Act without reading it', async ({ page }) => {
     await page.getByRole('button', { name: /refund that is stuck/ }).click()
     await expect(page.getByText('Not answered from the Act')).toBeVisible()

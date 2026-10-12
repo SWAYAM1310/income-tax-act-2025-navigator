@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Step } from '../api'
 import { provisionFor, resolveMarkers, shortCite } from '../api'
-import { ask, stop, useLive } from '../ask'
+import { ask, stop } from '../ask'
 import type { Turn } from '../history'
 import { getChat, useChats } from '../history'
 import { AnswerText } from './AnswerText'
@@ -45,13 +45,13 @@ type Props = {
 export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
   useChats() // re-render as the history changes
   const chat = getChat(chatId)
-  const live = useLive()
   const [open, setOpen] = useState<Open | null>(null)
   const thread = useRef<HTMLDivElement>(null)
   const stick = useRef(true)
   const [scrolled, setScrolled] = useState(false)
   const turns = chat?.turns ?? []
-  const busy = !!live && live.chatId === chatId
+  // answering here, or a question here is waiting for another chat's answer to finish
+  const busy = turns.some((t) => t.status === 'streaming' || t.status === 'queued')
 
   // follow the stream unless the reader has scrolled up
   useEffect(() => {
@@ -96,7 +96,7 @@ export function ChatView({ chatId, onCreated, composer, toolbar }: Props) {
 
         <div className="shrink-0 px-4 pt-1 pb-4 sm:px-6">
           <div className="mx-auto max-w-[46rem]">
-            <Composer ref={composer} name="composer" busy={busy} elsewhere={!!live && !busy} onAsk={(q) => onAsk(q)} onStop={stop} />
+            <Composer ref={composer} name="composer" busy={busy} elsewhere={false} onAsk={(q) => onAsk(q)} onStop={() => stop(chatId)} />
           </div>
         </div>
       </div>
@@ -171,6 +171,11 @@ function TurnView({ t, first, open, setOpen, onAsk }: TurnProps) {
             )
           })}
         </ol>
+      )}
+      {t.status === 'queued' && (
+        <p className="mt-4 mb-0 flex items-center gap-2 text-sm text-ink-soft">
+          <Loader className="spin size-3.5 text-jade" /> Waiting for the answer in another chat to finish
+        </p>
       )}
       {streaming && lines.length === 0 && (
         <p className="mt-4 mb-0 flex items-center gap-2 text-sm text-ink-soft"><Loader className="spin size-3.5 text-jade" /> Reading the question</p>

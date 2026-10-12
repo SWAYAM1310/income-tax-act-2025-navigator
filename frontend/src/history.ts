@@ -4,7 +4,8 @@ import { useSyncExternalStore } from 'react'
 import type { AnswerPayload, Passage, Step } from './api'
 import { shortCite, provisionFor, resolveMarkers } from './api'
 
-export type TurnStatus = 'streaming' | 'done' | 'stopped' | 'error'
+/** `queued`: asked while another answer was streaming; it starts when that one ends */
+export type TurnStatus = 'queued' | 'streaming' | 'done' | 'stopped' | 'error'
 
 export type Turn = {
   id: string
@@ -31,9 +32,9 @@ function load(): Chat[] {
   try {
     const v = JSON.parse(localStorage.getItem(KEY) ?? '[]')
     if (!Array.isArray(v)) return []
-    // a page closed mid-answer leaves a turn "streaming" forever; it was stopped
+    // a page closed mid-answer leaves a turn "streaming" (or waiting) forever; it was stopped
     return (v as Chat[]).map((c) => ({
-      ...c, turns: c.turns.map((t) => (t.status === 'streaming' ? { ...t, status: 'stopped' } : t)),
+      ...c, turns: c.turns.map((t) => (t.status === 'streaming' || t.status === 'queued' ? { ...t, status: 'stopped' } : t)),
     }))
   } catch {
     return []
@@ -78,10 +79,10 @@ export function useChats(): Chat[] {
 export const getChat = (id: string | null) => chats.find((c) => c.id === id) ?? null
 
 /** Start a turn (and the chat, if `chatId` is null); returns both ids. */
-export function addTurn(chatId: string | null, question: string): { chatId: string; turnId: string } {
+export function addTurn(chatId: string | null, question: string, status: TurnStatus = 'streaming'): { chatId: string; turnId: string } {
   const now = Date.now()
   const turn: Turn = { id: uid(), question, asked: now, steps: [], evidence: [], text: '', attempt: 1,
-    answer: null, error: null, status: 'streaming' }
+    answer: null, error: null, status }
   const existing = getChat(chatId)
   const chat: Chat = existing
     ? { ...existing, updated: now, turns: [...existing.turns, turn] }

@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from 'react'
 import type { AnswerPayload } from './api'
 import { REMOTE, streamQuery } from './api'
-import { addTurn, updateTurn } from './history'
+import { addTurn, getChat, updateTurn } from './history'
 
 type Live = { chatId: string; turnId: string; ctl: AbortController } | null
 
@@ -25,10 +25,25 @@ export function useLive(): Live {
   return useSyncExternalStore((l) => { listeners.add(l); return () => listeners.delete(l) }, () => live)
 }
 
-/** Ask `question` in `chatId` (null starts a new chat). Returns the chat id, or null if busy. */
-export function ask(chatId: string | null, question: string): string | null {
-  if (live) return null
+type Ids = { chatId: string; turnId: string }
+/** questions asked while another answer was streaming, oldest first */
+const queue: (Ids & { question: string })[] = []
+
+/** Ask `question` in `chatId` (null starts a new chat) and return the chat id. The question is
+ *  added to the chat at once; if another answer is streaming it waits (`queued`) and starts when
+ *  that one ends, so a question is never dropped. */
+export function ask(chatId: string | null, question: string): string {
+  if (live) {
+    const ids = addTurn(chatId, question, 'queued')
+    queue.push({ ...ids, question })
+    return ids.chatId
+  }
   const ids = addTurn(chatId, question)
+  run(ids, question)
+  return ids.chatId
+}
+
+function run(ids: Ids, question: string) {
   const ctl = new AbortController()
   live = { ...ids, ctl }
   emit()
@@ -61,11 +76,23 @@ export function ask(chatId: string | null, question: string): string | null {
       // a stream that ends without an answer event (server stopped) is not left "streaming"
       up((t) => (t.status === 'streaming' ? { ...t, status: t.error ? 'error' : 'stopped' } : t), true)
       live = null
-      emit()
+      // the next waiting question whose chat still exists (it may have been deleted meanwhile)
+      let next = queue.shift()
+      while (next && !getChat(next.chatId)?.turns.some((t) => t.id === next!.turnId)) next = queue.shift()
+      if (next) {
+        updateTurn(next.chatId, next.turnId, (t) => ({ ...t, status: 'streaming' }), true)
+        run(next, next.question)
+      } else emit()
     })
-  return ids.chatId
 }
 
-export function stop() {
-  live?.ctl.abort()
+/** Stop what is being answered in `chatId`: the streaming answer, or questions still waiting. */
+export function stop(chatId?: string | null) {
+  if (!chatId || live?.chatId === chatId) { live?.ctl.abort(); return }
+  for (let i = queue.length - 1; i >= 0; i--) {
+    const q = queue[i]
+    if (q.chatId !== chatId) continue
+    queue.splice(i, 1)
+    updateTurn(q.chatId, q.turnId, (t) => ({ ...t, status: 'stopped' }), true)
+  }
 }

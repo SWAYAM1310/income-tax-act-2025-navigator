@@ -58,12 +58,12 @@ export default function App() {
   // flies to where the answer starts, and the sidebar slides in (styles.css, "welcome -> chat").
   const askFromWelcome = (q: string, from?: HTMLElement | null) => {
     flag('seenWelcome', true)
-    let id: string | null = null
+    let id = ''
     const swap = () => flushSync(() => {
-      id = ask(null, q)  // null while another answer is still streaming
+      id = ask(null, q)  // waits its turn if another chat's answer is still streaming
       setRoute({ view: 'chat', id })
     })
-    const after = () => go(id ? `#/c/${id}` : '#/new')
+    const after = () => go(`#/c/${id}`)
     if (document.startViewTransition && !reducedMotion()) {
       if (from) from.style.viewTransitionName = 'question'
       document.startViewTransition(swap).updateCallbackDone.then(after, after)
