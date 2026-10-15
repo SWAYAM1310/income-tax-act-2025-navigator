@@ -520,6 +520,98 @@ section numbers, which a 20b model would take from the 1961 Act), and routing on
 amendment and table questions get their answer blocks. Tuned on `lay_dev` only; `lay_test` is
 frozen for the final check.
 
+## Phase 16: v10 (lay questions: one classifier call that scopes, rewrites and routes)
+
+v10 is v9 with `agent: {scope_check: lay, rewrite: true}` and `weights.rewrite: 0.25`
+(`configs/versions/v10.yaml`). v6's scope check is replaced by one gpt-oss-20b call,
+`router.understand` (max 700 tokens), that returns:
+
+- a **category**: forms / courts / other_law / own_case / current_facts / advice / act.
+  `in_scope` is derived in code: a first version asked for a bare `in_scope` and the model
+  answered true while its own reason said "asks which return form to file" (4 of 17 lay_dev
+  refusals let through).
+- **1-2 queries in the Act's vocabulary** ("deduction for interest on deposits with a savings
+  account"), with any provision number removed (`clean_queries`), because the 20b model knows the
+  1961 Act's numbering.
+- a **kind** (amendment / table / definition / general) that picks v9's answer block.
+
+The rewrites and kind-based routing are used only when the question names no provision and no
+defined term; questions in the Act's own terms keep v9's path exactly. The rewrites are searched
+densely beside the question (`hybrid.search(..., extra_qvecs)`) at 0.25 weight each.
+
+**Tuned on lay_dev only** (cached 20b replies made the sweeps free):
+- The category prompt says TCS by a seller of coal, scrap, cars or tour packages is income tax,
+  that an income-tax term such as *stamp duty value* is "act", that PPF/FD/EPF rates are
+  current_facts, and that a trailing "did the 2026 budget raise it?" is an amendment question.
+  Where the model still ignored the prompt, small code overrides apply: TDS/TCS in words
+  (`_AT_SOURCE_LAY`, with no GST mentioned) is never other law, and "budget"/"Finance Act" makes
+  the kind amendment.
+- Rewrite weight, recall@5 / MRR at 0 / 0.25 / 0.5 / 0.75 / 1.0: 0.795/0.705, **0.833/0.735**,
+  0.808/0.711, 0.808/0.713, 0.788/0.695. At full weight two generic rewrites outrank the specific
+  table row that the question's own embedding found.
+
+**Then on dev (the old golden questions):** recall@5 0.940 (v8 0.940), MRR 0.915 (0.913), but the
+lay prompt let two of 14 refusals through: "What is the penalty under the Black Money Act for
+undisclosed foreign assets?" and "What does the Finance Bill, 2027 propose?". Two more code
+overrides fixed both: a Finance Bill, Finance Act or budget for 2027 or later is current_facts
+(`_FUTURE_BUDGET`; a "2027-28" tax year is not), and a penalty, punishment or prosecution "under
+the *X* Act", where X is not the Income-tax Act, is other law (`_OTHER_ACT_PENALTY`). Naming such
+an Act is not enough, because the Act itself cites the Black Money, Benami, Wealth-tax and FEMA
+Acts. Over all 376 golden, lay and candidate questions the two rules fire only on those two. Dev
+scope is then 1.00 / 1.00, which makes it a tuned number, not an independent one.
+
+### Retrieval and scope, lay_dev (tuned) and lay_test (held out), recall@5 / MRR / hit@1
+
+| | v8 | **v10** |
+|---|---|---|
+| lay_dev, all 78 answerable | 0.692 / 0.603 / 0.500 | **0.833 / 0.735 / 0.615** |
+| lay_dev, situations (46) | 0.696 / 0.622 / 0.522 | 0.848 / 0.743 / 0.609 |
+| lay_dev, paraphrases (32) | 0.688 / 0.575 / 0.469 | 0.812 / 0.724 / 0.625 |
+| lay_dev, answerable refused | 8 / 78 | **1 / 78** |
+| lay_dev, refusals caught | 17 / 17 | 17 / 17 |
+| **lay_test, all 40 answerable** | 0.750 / 0.548 / 0.375 | **0.850 / 0.610 / 0.425** |
+| lay_test, situations (25) | 0.840 / 0.556 / 0.360 | 0.920 / 0.577 / 0.360 |
+| lay_test, paraphrases (15) | 0.600 / 0.533 / 0.400 | 0.733 / 0.667 / 0.533 |
+| **lay_test, answerable refused** | 3 / 40 | **1 / 40** |
+| **lay_test, refusals caught** | **5 / 5** | 3 / 5 |
+| dev (138), recall@5 / MRR | 0.940 / 0.913 | 0.940 / 0.915 |
+
+v2 on lay_dev, for reference: 0.788 / 0.683 / 0.577.
+
+- **The held-out gain holds:** +0.10 recall@5 on lay_test (lookup 0.82 → 0.94, table 0.67 →
+  0.83; amendment 0.71 and multi-step 0.75 unchanged), and fewer answerable questions refused
+  (v10's one: "How much of my yearly advance tax should be paid by the middle of December?",
+  called advice).
+- **But the held-out scope check is worse: 3 of 5 refusals caught (v8 5 of 5).** v10 let through
+  "Can my landlord legally raise my rent by 20% this year?" (tenancy law) and "What will next
+  year's budget change for salaried people?" (a future budget with no year, which
+  `_FUTURE_BUDGET` cannot see). Both are categories the prompt names; the 20b model still says
+  "act", the same failure the dev overrides patched. They were not patched, since lay_test is held
+  out, and with n = 5 it is two questions. Whether the answer model then refuses them was not
+  measured (neither is in lay_mini).
+- Amendment retrieval on lay_dev is v10's weak spot: 0.700 (v2 0.800).
+
+### End-to-end, lay_mini (n = 30, drawn from lay_dev) and dev_mini (n = 30), against v9
+
+| | Fact rec. | Exact | Cite prec. | Cite rec. | Grounded | Table exact | Amend. type | Refusal P / R | recall@5 | LLM tok/q |
+|---|---|---|---|---|---|---|---|---|---|---|
+| v9, lay_mini | 0.708 | 0.479 | 0.478 | 0.750 | 0.958 | 0.833 | 0.167 | 0.67 / 1.00 | 0.708 | 4,172 |
+| **v10, lay_mini** | **0.854** | **0.708** | **0.644** | **0.833** | 0.953 | 0.833 | **1.000** | **0.86 / 1.00** | **0.792** | 4,548 |
+| v9, dev_mini | 0.917 | 0.757 | 0.868 | 0.958 | 1.000 | 1.000 | 1.000 | 1.00 / 1.00 | 0.896 | 3,835 |
+| **v10, dev_mini** | 0.917 | 0.743 | 0.868 | 0.958 | 1.000 | 1.000 | 1.000 | 1.00 / 1.00 | **0.917** | 4,257 |
+
+- **Lay answers improve on every measure but grounded numbers** (−0.005). Amendment type 0.17
+  → 1.00 is the kind routing: a "did the 2026 budget change ..." question now gets the *What
+  changed* block. lay_mini is part of lay_dev, so these gains are measured on the tuning set.
+- **dev_mini does not regress.** Per question: one citation-precision gain and one loss, one
+  recall gain, and one strict-fact drop (multi_hop-24fe673c) with the soft score unchanged.
+- **Cost:** the classifier call is ~830 tokens against v6's ~420, so v10 is ~4.3-4.5K tokens per
+  question (~10% over v9).
+- **v10 is the version the app runs** (chat, API, MCP; 2026-10-15).
+- Cost of the phase: Groq's free tier only (gpt-oss-20b classification of lay_dev, dev and
+  lay_test, re-run after each prompt change; ~110K gpt-oss-120b tokens for lay_mini) and ~1K Jina
+  tokens for new query embeddings.
+
 ## Final numbers: frozen test split (n = 84, retrieval only)
 
 The test split was frozen by checksum in Phase 3 and run once, at the end, with `--final`

@@ -5,8 +5,10 @@
 # it did not refuse) and its scope check refused 8 of 78 answerable questions. v10 replaces the scope
 # check with one gpt-oss-20b call (`router.understand`) that judges scope with a prompt written for
 # lay questions, restates the question in the Act's vocabulary (searched densely alongside the
-# question, `weights.rewrite`), and names its kind, which picks the answer block. Questions that
-# name a provision or a defined term take v9's path unchanged.
+# question, `weights.rewrite`; 0.25 per rewrite was best on lay_dev: recall@5 0.795 / 0.833 / 0.808 /
+# 0.788 at 0 / 0.25 / 0.5 / 1.0, as a whole rewrite outranks the question's own specific row), and
+# names its kind, which picks the answer block. Questions that name a provision or a defined term
+# take v9's path unchanged.
 description: v9 + a lay-question scope check and the question rewritten in the Act's vocabulary
 chunks: v2
 retrieval:
@@ -14,7 +16,7 @@ retrieval:
   k: 10
   pool: 30
   retrievers: [dense, ids, under]
-  weights: {dense: 1.0, ids: 2.0, under: 1.0, fts: 1.0, rewrite: 1.0}
+  weights: {dense: 1.0, ids: 2.0, under: 1.0, fts: 1.0, rewrite: 0.25}
   endnotes: explicit
   xref: {seed_n: 3, keep: 4, slots: 2, both_ways: true}
 agent:

@@ -1,8 +1,8 @@
 # Project context (read this first)
 
-_Last updated: 2026-10-12. **Phase 15 (lay-person questions + baseline) DONE; Phase 16 (v10) BUILT, measurement running in a detached queue (`.cache/run_queue.log`). Phase 15 + the v10 code committed as work in progress (user approved; not pushed); v10's numbers go in a second commit (see Next steps).** Earlier the same day: **2026-10-12 (queue fix, committed and pushed): a question asked while another chat's answer was still streaming was dropped (ask() returned null; the welcome page then opened an empty chat). `ask.ts` now queues it: the turn is added at once with status `queued` ("Waiting for the answer in another chat to finish") and starts when the live one ends; Stop cancels a chat's waiting questions. Playwright 28/28 (new test fails on the old code).** Before that (scroll clutter fix, committed and pushed): chat top bar is solid (no see-through blur), the thread fades under it and above the question box (`.thread-fade` mask in styles.css), turns are split by a hairline, the token/route line moved into the passages panel, softer composer focus glow. Playwright 26/26.** Before that: welcome -> chat view transition. Asking on the welcome (Enter, arrow or an example) runs `document.startViewTransition` (`App.tsx` askFromWelcome, `flushSync`): the box glides to the chat composer (`composer`), the question flies to the first turn's heading (`question`), the welcome sinks away and the sidebar/header slide in (`styles.css`, "welcome -> chat"). Instant under reduced motion or without the API. Playwright 26/26. Committed and pushed.** Earlier: UI redesign, same palette. New minimal welcome (`Welcome.tsx`): headline + a real question box over `ActField` (`ActMap.tsx`, 536 dots, one per section; load wave, cursor glow with the nearest section named, tap ripple; static under reduced motion), 3 rotating examples (`src/examples.ts`), and the only "Not tax advice" line (removed from the chat page, user choice). The per-answer section strip (`ActStrip`) and the old recorded demo are gone. One hover language in `styles.css` (`.rail`, `.pill`, `.sheen`, `.draw-line`); sans font now Atkinson Hyperlegible Next. oxlint, build and Playwright 24/24 pass. Committed with the message "Redesign the UI..." and pushed; Vercel redeploys on push (frontend only).** Earlier the same day: the welcome screen's 4 example questions are now drawn at random per visit (`frontend/src/components/ChatView.tsx`: one pool per slot - definition/provision, rate table, amendment, refused - all verbatim v9 dev_mini questions v9 answered fully; no slot repeats its previous pick, via localStorage `statnav.examples`). e2e stubs `Math.random` to 0 and has a new reload test; oxlint, build and Playwright 22/22 pass. Committed 175a67a, pushed; live on Vercel (frontend only, Railway not needed).** _Earlier (2026-10-11):_ **2026-10-11: renamed to TaxLens (user choice) in the UI title/header/export footer, the API title, CLI banner, chart title, README H1 and pyproject description; the package, localStorage keys, repo and URLs are unchanged. Committed 6f318c4 and pushed. Ruff, 166 non-DB tests, oxlint, build and Playwright 20/20 pass; the DB tests were not run (Docker Desktop was off).** _Earlier (2026-10-10):_ **Phase 14 (v9, plain-English explained answers) DONE, committed a69cf60 and pushed 2026-10-10; Vercel deployed it, Railway did not (manual redeploy pending)** (dev_mini fact recall 0.917, cite P/R 0.868/0.958, everything else = v8; see Phase 14). Earlier: **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) LIVE at https://income-tax-act-2025-navigator.vercel.app (API https://income-tax-act-2025-navigator-production.up.railway.app).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
+_Last updated: 2026-10-15. **Phase 16 (v10, lay questions) DONE: accepted by the user and shipped as the default (chat, API, MCP, UI ladder highlight); write-up in `results/ladder.md` (Phase 16) and README; committed and pushed. Held-out lay_test (retrieval-only): recall@5 0.850 vs v8 0.750, answerable refused 1/40 vs 3/40, refusals caught 3/5 vs 5/5. lay_mini (tuned): fact recall 0.854 vs v9 0.708. dev = v8/v9 (recall@5 0.940, dev_mini fact recall 0.917, scope 1.00/1.00 after two dev-tuned overrides). Checks: `tasks.py check` 200 tests, oxlint, build, Playwright 28/28. **Railway needs a manual redeploy** (done when `/health` reports `"default_version":"v10"`).** _Before (2026-10-14): lay_dev targets met (recall@5 0.833 vs v2 0.788; answerable refused 1/78; refusals 17/17)._ _Before (2026-10-12): Phase 15 + the v10 code committed as WIP (not pushed)._ Earlier the same day: **2026-10-12 (queue fix, committed and pushed): a question asked while another chat's answer was still streaming was dropped (ask() returned null; the welcome page then opened an empty chat). `ask.ts` now queues it: the turn is added at once with status `queued` ("Waiting for the answer in another chat to finish") and starts when the live one ends; Stop cancels a chat's waiting questions. Playwright 28/28 (new test fails on the old code).** Before that (scroll clutter fix, committed and pushed): chat top bar is solid (no see-through blur), the thread fades under it and above the question box (`.thread-fade` mask in styles.css), turns are split by a hairline, the token/route line moved into the passages panel, softer composer focus glow. Playwright 26/26.** Before that: welcome -> chat view transition. Asking on the welcome (Enter, arrow or an example) runs `document.startViewTransition` (`App.tsx` askFromWelcome, `flushSync`): the box glides to the chat composer (`composer`), the question flies to the first turn's heading (`question`), the welcome sinks away and the sidebar/header slide in (`styles.css`, "welcome -> chat"). Instant under reduced motion or without the API. Playwright 26/26. Committed and pushed.** Earlier: UI redesign, same palette. New minimal welcome (`Welcome.tsx`): headline + a real question box over `ActField` (`ActMap.tsx`, 536 dots, one per section; load wave, cursor glow with the nearest section named, tap ripple; static under reduced motion), 3 rotating examples (`src/examples.ts`), and the only "Not tax advice" line (removed from the chat page, user choice). The per-answer section strip (`ActStrip`) and the old recorded demo are gone. One hover language in `styles.css` (`.rail`, `.pill`, `.sheen`, `.draw-line`); sans font now Atkinson Hyperlegible Next. oxlint, build and Playwright 24/24 pass. Committed with the message "Redesign the UI..." and pushed; Vercel redeploys on push (frontend only).** Earlier the same day: the welcome screen's 4 example questions are now drawn at random per visit (`frontend/src/components/ChatView.tsx`: one pool per slot - definition/provision, rate table, amendment, refused - all verbatim v9 dev_mini questions v9 answered fully; no slot repeats its previous pick, via localStorage `statnav.examples`). e2e stubs `Math.random` to 0 and has a new reload test; oxlint, build and Playwright 22/22 pass. Committed 175a67a, pushed; live on Vercel (frontend only, Railway not needed).** _Earlier (2026-10-11):_ **2026-10-11: renamed to TaxLens (user choice) in the UI title/header/export footer, the API title, CLI banner, chart title, README H1 and pyproject description; the package, localStorage keys, repo and URLs are unchanged. Committed 6f318c4 and pushed. Ruff, 166 non-DB tests, oxlint, build and Playwright 20/20 pass; the DB tests were not run (Docker Desktop was off).** _Earlier (2026-10-10):_ **Phase 14 (v9, plain-English explained answers) DONE, committed a69cf60 and pushed 2026-10-10; Vercel deployed it, Railway did not (manual redeploy pending)** (dev_mini fact recall 0.917, cite P/R 0.868/0.958, everything else = v8; see Phase 14). Earlier: **Phases 0-11 DONE; Phase 12 (UI redesign + streaming chat) DONE (b261565); Phase 13 (free Railway + Vercel deploy) LIVE at https://income-tax-act-2025-navigator.vercel.app (API https://income-tax-act-2025-navigator-production.up.railway.app).** CI was skipped by the user (2026-10-07). 2026-10-07: v7 mutation test done; final test numbers are retrieval-only (v6/v8 test recall@5 0.912, MRR 0.868; end-to-end test runs stopped by the user). Ladder v0-v8 measured; the shipped version is **v8** (v6 + endnotes that state the wording before/after): dev_mini fact recall 0.875 (oracle 0.833), citation precision 0.958, refusal P/R 1.00/1.00, amendment direction 7/7 on dev substitutions (v6 0/3, oracle 2/6); dev recall@5 0.940. Everything is pushed (Phase 12 b261565, Phase 13 deploy commit); `.github/workflows/ci.yml` stays local and untracked (CI skipped); the index dump is published as release `index-2026-10-06`. Nothing required remains; Next steps 1 and 3-6 are optional. Update this file at the end of every session or phase._
 
-> **Resume here:** read `.cache/run_queue.log` (v10 lay_dev, dev, dev_mini runs), then continue Phase 16 in Next steps. Phase 15 + the v10 code are committed (WIP, not pushed); `results/v10/` is left out until its runs complete. Start Docker Desktop first (`docker start tax_project-db-1` if the container exited; it keeps its data in a named volume). Git: Phase 6 8a1cc24, Phases 7-10 56dfec8, Phase 11 part 1 184f361 + README release link 56d35af, Phase 11 final 4eb68dc, all pushed. `.github/workflows/ci.yml` is local and untracked on purpose (CI skipped).
+> **Resume here:** Phase 16 is done and the queue is idle. Remaining: the manual Railway redeploy (user). For future queues: read `.cache/run_queue.log`; if the queue died (it died twice, 10-12 and 10-14, after reboots), start Docker Desktop (`docker start tax_project-db-1`) and relaunch it with `Start-Process "C:\Program Files\Git\bin\bash.exe" -ArgumentList '.cache/launch_queue.sh' -WorkingDirectory E:\tax_project -WindowStyle Hidden` (edit STEPS inside it). Plain `bash` in PowerShell is WSL's bash, and an inline `-c` command hung. Then continue Phase 16 in Next steps. Git: Phase 15 + v10 code committed (WIP, not pushed); results/v10/ and the 10-14/10-15 fixes are not.
 
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
@@ -502,35 +502,67 @@ Pseudo-splits for pipeline checks only: `candidates` (all non-rejected, unverifi
 
 ## Next steps (in order)
 
-**Phase 16 (v10, lay robustness) — BUILT 2026-10-12, measurement in progress.**
+**Phase 16 (v10, lay robustness): DONE 2026-10-15 (accepted by the user, option 1: as is). Record below; nothing required remains except the Railway redeploy.**
 - Built: `configs/versions/v10.yaml` (v9 + `agent: {scope_check: lay, rewrite: true}`,
-  `weights.rewrite: 1.0`). `router.understand` = one gpt-oss-20b call (max 700 tokens) returning a
+  `weights.rewrite: 0.25`). `router.understand` = one gpt-oss-20b call (max 700 tokens) returning a
   *category* (forms / courts / other_law / own_case / current_facts / advice / act; in_scope is
   derived in code), 1-2 queries in the Act's vocabulary (provision numbers stripped by
-  `clean_queries`), and a kind. TDS/TCS questions filed under other_law are forced in scope
-  (`_AT_SOURCE`). Graph: rewrites + kind-based routing (`_lay_route`, `TABLE_WORDS`) only when the
-  question names no provision and no defined term; v6-v9 keep `SCOPE_PROMPT`. `hybrid.search(...,
-  extra_qvecs)`, `route.retrieve(..., rewrites)`. 8 new tests in `tests/test_agent.py`; 197 pass.
-- Measured so far (lay_dev): the first prompt (bare in_scope) took answerable refusals 8/78 -> 1/78
-  and recall@5 0.692 -> 0.788 (= v2), but caught only 13/17 refusals (the model's reason named the
-  out-of-scope category while saying in_scope true) -> switched to categories. On 35 cached
-  questions, rewrite weight 0 / 0.5 / 1.0 / 2.0 gave recall@5 0.757 / 0.786 / 0.786 / 0.771 (2.0
-  hurt MRR); a generic rewrite ("tax deducted at source on ...") pulled s393's generic
-  sub-sections over the row (bitcoin) -> prompt now asks for the specific payment in the Act's
-  words. The category prompt + specific-query prompt are NOT yet measured (20b daily cap hit).
-- Running (detached, `scripts/run_queue.sh`, log `.cache/run_queue.log`, started 12:34 UTC,
-  sleeps to the 00:05 UTC reset): `v10 lay_dev --retrieval-only`, `v10 dev --retrieval-only`,
-  `v10 dev_mini` (e2e). ~270K 20b tokens = two Groq days; dev_mini only spends 120b on questions
-  whose evidence changed.
-- Then, in order:
-  1. Review lay_dev (`python -m evals.lay_report --versions v2 v8 v10 --show`): target
-     answerable refused ~0-1/78, refusals caught 17/17, recall@5 above v2's 0.788.
-  2. Acceptance on old dev: recall@5 >= 0.933, scope P/R 1.00/1.00; dev_mini no regression.
-  3. Only then the held-out runs: `v8` and `v10` on `lay_test --retrieval-only --final`, and
-     `v10 lay_mini` end to end (~100K 120b). Use `STEPS=... bash scripts/run_queue.sh`.
-  4. If accepted: make v10 the default (chat, API, MCP, UI ladder highlight, as Phase 14 did for v9),
-     write Phase 16 in `results/ladder.md` + README, then commit the v10 results + write-up and push
-     (ask first). Railway redeploy is manual.
+  `clean_queries`), and a kind. Graph: rewrites + kind-based routing (`_lay_route`, `TABLE_WORDS`)
+  only when the question names no provision and no defined term; v6-v9 keep `SCOPE_PROMPT`.
+  `hybrid.search(..., extra_qvecs)`, `route.retrieve(..., rewrites)`. 10 tests in `tests/test_agent.py`.
+- 2026-10-12: the bare in_scope prompt caught 13/17 refusals -> switched to categories.
+- 2026-10-14, lay_dev with the category prompt: recall@5 0.788 (= v2), answerable refused 3/78
+  (two plain-word TCS questions called GST; "stamp duty value" called other law), refusals 16/17
+  ("PPF rate right now" let through). Fixes (uncommitted): prompt (TCS by coal/tour sellers is
+  "act"; an income-tax term like stamp duty value is "act"; PPF/FD/EPF rates are current_facts;
+  a trailing "did the 2026 budget raise it?" is an amendment kind) and two code overrides
+  (`_AT_SOURCE_LAY`: other_law + "collect/deduct/cut ... tax" and no GST -> act; `_BUDGET`:
+  "budget"/"Finance Act" -> amendment kind). 2 new tests. -> answerable refused 1/78
+  (lay_lookup-5207daa2, "how do I figure out my average tax rate" -> advice), refusals 17/17.
+- Rewrite-weight sweep on lay_dev (free: cached 20b replies): recall@5 / MRR at 0 / 0.25 / 0.5 /
+  0.75 / 1.0 = 0.795/0.705, **0.833/0.735**, 0.808/0.711, 0.808/0.713, 0.788/0.695. At 1.0 two
+  generic rewrites outrank the specific s393/s394 row the question's own embedding found. Set 0.25.
+  **v10 lay_dev now 0.833 / 0.735 / 0.615 (recall@5 / MRR / hit@1) vs v2 0.788 / 0.683 / 0.577,
+  v8 0.692.** Weak spot: amendment 0.700 (v2 0.800). Sweep outputs kept in `.cache/sweep_rewrite/`.
+  All of this was tuned on lay_dev; lay_test is the honest check.
+- 2026-10-15, dev acceptance. `v10 dev --retrieval-only`: recall@5 0.940 / MRR 0.915 (v8 0.940 /
+  0.913), but scope recall 0.857: gpt-oss-20b called "penalty under the Black Money Act ..." and
+  "What does the Finance Bill, 2027 propose?" act. Two code overrides in `router.understand`
+  (cached 20b replies stay valid, so re-checking was free): `_FUTURE_BUDGET` (Finance Bill/Act or
+  budget for 2027+, not a "2027-28" tax year -> current_facts) and `_OTHER_ACT_PENALTY` (penalty/
+  punishment/prosecution "under the <named> Act", not the Income-tax Act -> other_law; naming the
+  Act alone is not enough, since the Act cites the Black Money, Benami, Wealth-tax and FEMA Acts).
+  Over all 376 golden/lay/candidate questions they fire only on those two. 1 new test. -> **dev
+  scope P/R 1.00/1.00**; lay_dev unchanged (0.833 / 0.735, scope P 0.944 / R 1.00). Tuned on dev:
+  the scope result there is no longer independent.
+- `v10 dev_mini` (30/30, 120b mostly cached from v9): fact recall 0.917 (= v9), exact 0.743 (v9
+  0.757: multi_hop-24fe673c), cite P/R 0.868/0.958 (= v9; one question up, one down), table 1.00,
+  amendment type/direction 1.00/1.00, refusal P/R 1.00/1.00, recall@5 0.917 (v9 0.896),
+  4,257 tok/q (v9 3,835; the understand call is ~830 vs ~420). No regression -> accepted.
+  `evals.report` only lists v0-v7 + oracle (`ORDER`), so compare v8-v10 from metrics.json.
+- **Held-out lay_test (45 q: 40 answerable, 5 refusals), retrieval-only, 2026-10-15:** v10 recall@5
+  **0.850** / MRR 0.610 / hit@1 0.425 vs v8 0.750 / 0.548 / 0.375 (lookup 0.94 vs 0.82, table 0.83
+  vs 0.67; amendment 0.71 and multi_hop 0.75 unchanged). Answerable refused **1/40** (v8 3/40;
+  v10's is lay_table-ed48a7f5, advance tax by mid-December -> "advice"). Refusals caught **3/5**
+  (v8 5/5): v10 let through "Can my landlord legally raise my rent by 20%?" (tenancy law) and
+  "What will next year's budget change for salaried people?" (future budget; `_FUTURE_BUDGET`
+  needs a year number). Same failure as on dev: the 20b model says "act" for categories the
+  prompt names. Not patched: lay_test is held out. Whether the answer step refuses them anyway is
+  untested (neither is in lay_mini, which is drawn from lay_dev).
+- **`v10 lay_mini` end to end (30/30, 2026-10-15; tuned set, drawn from lay_dev), v9 -> v10:** fact
+  recall 0.708 -> **0.854** (exact 0.479 -> 0.708), all facts 0.625 -> 0.792, cite P/R
+  0.478/0.750 -> **0.644/0.833**, amendment type 0.167 -> 1.000, recall@5 0.708 -> 0.792, table
+  exact 0.833 (=), grounded numbers 0.958 -> 0.953, refusal P/R 0.667/1.00 -> 0.857/1.00, scope
+  6/6 caught, 4,548 tok/q (v9 4,172), p50 3.3 s (=).
+- **Accepted 2026-10-15 (user).** v10 is the default: `api/app.py:DEFAULT_VERSION`, `chat.py`
+  (`--version` default), MCP (uses the API's default), `LadderView.tsx` SHIPPED. `api/app.py`
+  `VERSIONS` now sorts numerically (a string sort put v10 between v1 and v2). Live smoke test:
+  "I sell coal ... collect extra tax from the buyers?" -> table route, s394 cited.
+- Remaining (user): redeploy Railway by hand; check `/health` reports v10.
+- Optional follow-ups: (a) the lay scope check misses categories the prompt names (tenancy law,
+  a future budget without a year); a second check (e.g. v6's `SCOPE_PROMPT` as a veto, ~420
+  tok/q) would be a v11, tuned on lay_dev only. (b) lay_dev amendment recall@5 0.700 (v2 0.800).
+  (c) `evals.report` `ORDER` lists only v0-v7 + oracle; add v8-v10 if the report tables are wanted.
 
 **Older items:**
 
@@ -573,9 +605,10 @@ end-to-end run of v9 (~138 x 3.8K tokens, 3 Groq days).
    sleep/wake path, and Railway's usage page after a day (it must stay under $1/month).
 
 ## Known issues
-- **Lay questions (Phase 15):** the system is much weaker on plain-language questions (lay_dev
-  recall@5 0.692 for v8, v9 lay_mini fact recall 0.708) than the headline numbers suggest; the
-  `person` field on paraphrases is the LLM's own label and over-reports "first".
+- **Lay questions:** v10 closes much of the Phase 15 gap (lay_test recall@5 0.850, lay_mini fact
+  recall 0.854) but its 20b scope check lets through out-of-scope lay questions in categories the
+  prompt names (lay_test 3/5 caught; v8 5/5). The `person` field on paraphrases is the LLM's own
+  label and over-reports "first".
 - **Railway, 2026-10-11:** deployment `1f705a40` was not built from `deploy/railway.Dockerfile`
   (no Postgres in the container; it used the code's default `localhost:5433`, so every DB request
   returned 500). It was rebuilt correctly as `449d8ee1`, but `PORT=8000` had been deleted from the

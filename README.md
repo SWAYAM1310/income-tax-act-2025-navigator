@@ -35,7 +35,8 @@ retrieval on `dev` (138 questions).
 | v6 | LangGraph agent: scope check, definition lookup, structured endnotes | 0.940 | 0.875 | 0.958 | 1.000 | 1.00 / 1.00 | 2,531 |
 | v7 | v6 + an LLM claim checker (kept as a gate only) | — | 0.875 | 0.958 | 1.000 | 1.00 / 1.00 | 4,625 |
 | v8 | v6 + endnotes that state the wording before and after | 0.940 | 0.875 | 0.958 | 1.000 | 1.00 / 1.00 | 2,532 |
-| **v9** | **v8 + plain-English answers: sections, a worked example, inline § citations** | **0.940** | **0.917** | 0.868 | **1.000** | **1.00 / 1.00** | 3,835 |
+| v9 | v8 + plain-English answers: sections, a worked example, inline § citations | 0.940 | 0.917 | 0.868 | 1.000 | 1.00 / 1.00 | 3,835 |
+| **v10** | **v9 + one classifier call that scopes, rewrites and routes plain-language questions** | **0.940** | **0.917** | 0.868 | **1.000** | **1.00 / 1.00** | 4,257 |
 | oracle | the gold provisions handed to the model (ceiling) | — | 0.833 | 1.000 | 0.667 | 1.00 / 0.83 | 920 |
 
 What the ladder shows:
@@ -70,7 +71,11 @@ What the ladder shows:
   because the answers also cite neighbouring passages (a table's notes, related sub-sections)
   that the gold set does not list. It costs about 50% more tokens. Key terms are kept only when a
   passage defines them, checked in code, because the model otherwise explains words from memory.
-  v9 is the version the app runs.
+- **Plain-language questions (v10).** See the stress test below: v10 replaces v6's scope check
+  with one gpt-oss-20b call that judges scope with a prompt written for lay questions, restates
+  the question in the Act's vocabulary (searched beside it) and names its kind, which picks the
+  answer block. Questions in the Act's own terms keep v9's path, so `dev_mini` is unchanged.
+  v10 is the version the app runs.
 
 Honest caveats (more in [`results/ladder.md`](results/ladder.md#caveats)):
 
@@ -78,8 +83,9 @@ Honest caveats (more in [`results/ladder.md`](results/ladder.md#caveats)):
   numbers are the steadier signal.
 - 220 of the 222 golden questions were **bulk-accepted after spot checks**, not individually
   verified; the multi-step questions' expected facts are partly weak (LLM-drafted).
-- Some choices were tuned on dev (v5's expansion slots, v6's scope prompt). The test split (84
-  questions) is frozen by checksum and is used only for the final numbers.
+- Some choices were tuned on dev (v5's expansion slots, v6's scope prompt, two of v10's scope
+  overrides). The test split (84 questions) is frozen by checksum and is used only for the
+  final numbers.
 - `amendment_direction` covers only the 13 amendment questions whose endnote quotes the replaced
   words, and abstains when an answer does not quote both wordings, so its n is small.
 
@@ -117,12 +123,26 @@ measures that case. Top-5 recall on `lay_dev` (78 answerable questions):
 | lay questions | 0.545 | **0.788** | 0.788 / 0.782 | 0.692 |
 | the same gold, original wording (32 pairs) | 0.484 | 0.781 | 0.969 | **0.969** |
 
-v9 end to end on `lay_mini` (30): facts found **0.708** (dev_mini 0.917), refusals right 0.67
-(1.00), amendment type 0.17 (1.00). The exact-id lookup behind v3-v8's gains needs a section
-number lay users never type; v6's scope check refuses 8 of 78 answerable lay questions as
-"personal advice" or "GST"; and the answer model refuses some of the rest. Details and the fix
-plan (a lay scope prompt, rewriting the question into the Act's vocabulary) are in
-[`results/ladder.md`](results/ladder.md#phase-15-lay-person-questions-how-much-of-the-ladder-survives-plain-language).
+Before v10, v9 end to end on `lay_mini` (30) found **0.708** of the facts (dev_mini 0.917), with
+refusals right 0.67 and amendment type 0.17: the exact-id lookup behind v3-v8's gains needs a
+section number lay users never type, and v6's scope check refused 8 of 78 answerable lay
+questions as "personal advice" or "GST".
+
+**v10** (one classifier call that scopes with a lay prompt, rewrites the question into the Act's
+vocabulary and routes on its kind; tuned on `lay_dev` only) against v8, top-5 recall:
+
+| | v8 | **v10** |
+|---|---|---|
+| lay_dev (78 answerable, tuned on) | 0.692 | **0.833** |
+| **lay_test (40 answerable, frozen, held out)** | 0.750 | **0.850** |
+| lay_test: answerable questions refused | 3 / 40 | **1 / 40** |
+| lay_test: out-of-scope questions caught | **5 / 5** | 3 / 5 |
+
+End to end on `lay_mini`, v9 → v10: facts found 0.708 → **0.854**, citations correct 0.48 →
+0.64, amendment type 0.17 → **1.00**. The held-out cost is the scope check: v10 answered "Can my
+landlord legally raise my rent?" and "What will next year's budget change?", which v8 refused
+(n = 5, so two questions). Details in
+[`results/ladder.md`](results/ladder.md#phase-16-v10-lay-questions-one-classifier-call-that-scopes-rewrites-and-routes).
 
 ## How it works
 

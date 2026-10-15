@@ -71,11 +71,14 @@ decide whether the Act defines, contains or specifies something: a later step ch
 1. Category. Pick exactly one:
 - "forms": which return form to file, Income-tax Rules, CBDT circulars or notifications;
 - "courts": a court or tribunal decision;
-- "other_law": GST, stamp duty, company or tenancy law, treaties, foreign tax. NOT tax deducted \
-or collected at source (TDS/TCS): that is income tax, even when a car dealer, travel agent, bank \
-or buyer collects it;
+- "other_law": GST, how much stamp duty or registration fee to pay, company or tenancy law, \
+treaties, foreign tax. NOT tax deducted or collected at source (TDS/TCS): that is income tax, \
+even when a seller of coal, scrap, cars or tour packages, a bank or a buyer collects it ("do I \
+have to collect tax from my customers?" is "act"). NOT what an income-tax term means ("stamp duty \
+value", "fair market value"): that is "act";
 - "own_case": using the e-filing portal, or the user's own notice, refund status or dispute;
-- "current_facts": today's interest rates, people, statistics, or a future budget;
+- "current_facts": the interest a bank or scheme pays today (PPF, FD, EPF), people, \
+statistics, or a future budget;
 - "advice": working out one person's tax bill, or choosing for them (which regime or investment \
 is better, whether a plan is a good idea);
 - "act": anything else, including what the Act says about the user's own situation ("I pay rent \
@@ -90,7 +93,8 @@ for professional services paid to a resident", "deduction for interest on deposi
 savings account", "income not included in total income: agricultural income"). Never write a \
 section, Schedule, clause or serial number.
 
-3. Kind: "amendment" if it asks what changed in 2026 or in the budget; "table" if it asks for a \
+3. Kind: "amendment" if it asks what changed in 2026 or in the budget, even as a second \
+question ("... Did the 2026 budget raise it?"); "table" if it asks for a \
 rate, threshold, slab, or an amount deducted or collected at source; "definition" only if it \
 asks what a particular word or phrase means; otherwise "general".
 
@@ -103,6 +107,25 @@ Return only JSON: {"category": "act", "reason": "<one short sentence>", "queries
 CATEGORIES = ("forms", "courts", "other_law", "own_case", "current_facts", "advice", "act")
 _AT_SOURCE = re.compile(r"\b(?:TDS|TCS|(?:deducted|collected) at source|tax (?:deduction|"
                         r"collection) at source)\b", re.I)
+#: the same in plain words ("collect tax from the buyers", "tax cut from the interest"); gpt-oss-20b
+#: still called "I sell coal ... do I have to collect extra tax from the buyers?" GST (lay_dev)
+_AT_SOURCE_LAY = re.compile(r"\b(?:collect|deduct|cut|withh[oe]ld)\w*\b[^.?]{0,40}\btax\b|"
+                            r"\btax\b[^.?]{0,40}\b(?:collect|deduct|cut|withh[oe]ld)\w*\b", re.I)
+_GST = re.compile(r"\b(?:GST|goods and services tax)\b", re.I)
+#: a budget question in plain words; the 20b model called "... Did the 2026 budget raise it?"
+#: "general", so the answer lost its *What changed* block
+_BUDGET = re.compile(r"\b(?:budget|finance act)\b", re.I)
+#: a later year's budget: the corpus is the Act as amended by the Finance Act, 2026, yet gpt-oss-20b
+#: called "What does the Finance Bill, 2027 propose?" act (dev). A "2027-28" tax year is not one.
+_FUTURE_BUDGET = re.compile(
+    r"\b(?:finance\s+(?:bill|act)|budget)\W{1,3}20(?:2[7-9]|[3-9]\d)\b(?!-)|"
+    r"\b20(?:2[7-9]|[3-9]\d)\b(?!-)\W{1,3}(?:union\s+)?(?:budget|finance\s+(?:bill|act))\b", re.I)
+#: a penalty under another named Act is in that Act. The Act cites the Black Money, Benami and
+#: Wealth-tax Acts, so naming one is not enough; gpt-oss-20b called "What is the penalty under the
+#: Black Money Act for undisclosed foreign assets?" act (dev)
+_OTHER_ACT_PENALTY = re.compile(
+    r"\b(?i:penalt(?:y|ies)|punishment|prosecution)\b[^.?]{0,30}\b(?i:under\s+the)\s+"
+    r"(?!(?i:income[\s‑-]tax)\b)(?:[A-Z][\w()‑-]*\s+){1,8}Act\b")
 KINDS = ("amendment", "table", "definition", "general")
 #: a rewrite in the Act's words that asks for a table's numbers (the 20b model often calls these
 #: "general", and `_TABLE` only knows the abbreviations)
@@ -159,8 +182,15 @@ def understand(llm: ChatClient, question: str) -> Understanding:
     reason = str(out.get("reason") or "")
     # the prompt says TDS/TCS is income tax, yet gpt-oss-20b still filed "tax deducted at source
     # on freelance fees" under other_law (lay_dev); a TDS/TCS question is never other law
-    if category == "other_law" and _AT_SOURCE.search(f"{question} {reason}"):
+    if category == "other_law" and (_AT_SOURCE.search(f"{question} {reason}") or (
+            _AT_SOURCE_LAY.search(question) and not _GST.search(question))):
         category = "act"
+    if category == "act" and _FUTURE_BUDGET.search(question):
+        category = "current_facts"
+    elif category == "act" and _OTHER_ACT_PENALTY.search(question):
+        category = "other_law"
+    if kind in ("general", "table") and _BUDGET.search(question):
+        kind = "amendment"
     # an unknown or missing category fails open
     in_scope = category not in CATEGORIES or category == "act"
     if not in_scope:

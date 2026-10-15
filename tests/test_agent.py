@@ -330,3 +330,28 @@ def test_a_tds_question_filed_under_other_law_stays_in_scope():
     gst = understand(FakeLLM('{"category": "other_law", "reason": "GST on broadband"}'),
                      "What's the GST on my broadband bill?")
     assert not gst.in_scope
+
+
+def test_tax_collected_from_buyers_in_plain_words_stays_in_scope():
+    reply = '{"category": "other_law", "reason": "sale of coal falls under GST"}'
+    assert understand(FakeLLM(reply), "I sell coal to traders. Do I have to collect extra tax "
+                                      "from the buyers?").in_scope
+    assert not understand(FakeLLM(reply), "Do I have to collect GST from my coal buyers?").in_scope
+
+
+def test_a_budget_question_is_an_amendment_kind():
+    u = understand(FakeLLM('{"category": "act", "queries": ["penalty"], "kind": "general"}'),
+                   "What is the penalty if I don't cooperate? Did the 2026 budget raise it?")
+    assert u.kind == "amendment"
+
+
+def test_a_later_budget_or_another_acts_penalty_is_out_of_scope():
+    act = '{"category": "act", "queries": ["finance bill"], "kind": "general"}'
+    assert not understand(FakeLLM(act), "What does the Finance Bill, 2027 propose?").in_scope
+    assert understand(FakeLLM(act), "What is the rate for tax year 2027-28?").in_scope
+    assert not understand(FakeLLM(act), "What is the penalty under the Black Money Act for "
+                                        "undisclosed foreign assets?").in_scope
+    # the Act cites the Black Money Act, so naming it alone stays in scope
+    assert understand(FakeLLM(act), "Is income taxed under the Black Money Act exempt?").in_scope
+    assert understand(FakeLLM(act), "What is the penalty under the Income-tax Act for late "
+                                    "filing?").in_scope

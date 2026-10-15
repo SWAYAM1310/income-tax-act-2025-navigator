@@ -40,8 +40,8 @@ def client_with(answer_llm, classify_llm, cfg=CFG) -> TestClient:
 
 def test_health():
     r = client_with(FakeLLM(), FakeLLM()).get("/health")
-    assert r.status_code == 200 and r.json()["default_version"] == "v9"
-    assert "v9" in r.json()["versions"] and "oracle" not in r.json()["versions"]
+    assert r.status_code == 200 and r.json()["default_version"] == "v10"
+    assert r.json()["versions"][-2:] == ["v9", "v10"] and "oracle" not in r.json()["versions"]
 
 
 def test_query_streams_steps_evidence_and_a_cited_answer(hits):
