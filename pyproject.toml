@@ -24,6 +24,8 @@ dependencies = [
     "fastapi>=0.142.2",
     "uvicorn[standard]>=0.54.0",
     "mcp>=2.3.0",
+    "langsmith>=0.14.9",
+    "langchain-core>=1.6.11",
 ]
 
 [dependency-groups]

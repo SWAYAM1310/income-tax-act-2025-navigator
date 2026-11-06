@@ -1,6 +1,10 @@
 import json
+import os
 
 import pytest
+
+# Tests must not upload to LangSmith. Set first: load_dotenv keeps a value that already exists.
+os.environ["LANGSMITH_TRACING"] = "false"
 
 from statnav.config import pdf_path
 from statnav.ingest.build import latest, load_jsonl

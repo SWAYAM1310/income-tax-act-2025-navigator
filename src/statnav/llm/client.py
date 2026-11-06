@@ -12,6 +12,8 @@
 - `chat_stream` is for the chat UI only. Groq cannot stream in JSON mode, so it sends the same
   request without `response_format`; that request hashes differently, so streamed replies are
   cached apart from the ones the eval ladder measures.
+- `chat` and `chat_stream` are LangSmith LLM runs when `LANGSMITH_TRACING=true` (no-ops otherwise).
+  A cached reply reports no token usage, so traces add up to what the provider was really sent.
 """
 
 from __future__ import annotations
@@ -30,6 +32,8 @@ from functools import lru_cache
 from pathlib import Path
 
 import httpx
+from langsmith import traceable
+from langsmith.run_helpers import get_current_run_tree
 from tenacity import retry, retry_if_exception, stop_after_attempt, wait_exponential
 
 from statnav.config import CONFIG_DIR, ROOT, base_config, load_yaml
@@ -139,13 +143,18 @@ class _Window:
 _windows: dict[str, _Window] = {}
 
 
+def _trace_inputs(inputs: dict) -> dict:
+    """What a trace shows of a call: not `self` (the HTTP client) or the streaming callback."""
+    return {"messages": inputs.get("messages"), "json_mode": inputs.get("json_mode", False)}
+
+
 class ChatClient:
     def __init__(self, role: str, transport: httpx.BaseTransport | None = None,
                  store_path: Path | None = None):
         cfg = models_config()
         r = cfg["roles"][role]
         p = cfg["providers"][r["provider"]]
-        self.role, self.model = role, r["model"]
+        self.role, self.model, self.provider = role, r["model"], r["provider"]
         self.max_tokens = r["max_tokens"]
         self.reasoning_effort = r.get("reasoning_effort")
         self.tokens_per_day = p["tokens_per_day"]
@@ -166,6 +175,23 @@ class ChatClient:
 
     def spent_today(self) -> int:
         return self.store.spent_today(self.model)
+
+    def _traced(self, reply: Reply) -> Reply:
+        """Record the reply on the current LangSmith run, if there is one."""
+        run = get_current_run_tree()
+        if run is None:
+            return reply
+        run.metadata.update(ls_provider=self.provider, ls_model_name=self.model,
+                            ls_model_type="chat", role=self.role, cached=reply.cached)
+        outputs = {"text": reply.text}
+        if reply.cached:
+            run.set(outputs=outputs)
+            return reply
+        u = reply.usage
+        run.set(outputs=outputs, usage_metadata={"input_tokens": u.get("prompt_tokens", 0),
+                                                 "output_tokens": u.get("completion_tokens", 0),
+                                                 "total_tokens": u.get("total_tokens", 0)})
+        return reply
 
     @retry(retry=retry_if_exception(_retryable), stop=stop_after_attempt(6),
            wait=wait_exponential(multiplier=4, min=5, max=90), reraise=True)
@@ -200,6 +226,7 @@ class ChatClient:
                                  f"this call (~{est:,}) would pass {self.tokens_per_day:,}")
         return est
 
+    @traceable(run_type="llm", name="chat", process_inputs=_trace_inputs)
     def chat(self, messages: list[dict], json_mode: bool = False,
              max_tokens: int | None = None) -> Reply:
         payload = self._payload(messages, max_tokens)
@@ -208,7 +235,7 @@ class ChatClient:
         key = _key(payload)
         hit = self.store.get(key)
         if hit is not None:
-            return Reply(hit["text"], hit["usage"], self.model, True, 0.0)
+            return self._traced(Reply(hit["text"], hit["usage"], self.model, True, 0.0))
         est = self._budget(messages, payload)
         data = self._post(payload, est)
         latency = self._http_s
@@ -221,8 +248,9 @@ class ChatClient:
         self.store.put(key, self.model, payload, {"text": text, "usage": usage})
         log.info("llm_call", role=self.role, model=self.model, latency_s=round(latency, 2),
                  **{k: usage.get(k) for k in ("prompt_tokens", "completion_tokens")})
-        return Reply(text, usage, self.model, False, latency)
+        return self._traced(Reply(text, usage, self.model, False, latency))
 
+    @traceable(run_type="llm", name="chat_stream", process_inputs=_trace_inputs)
     def chat_stream(self, messages: list[dict], on_delta: Callable[[str], None],
                     max_tokens: int | None = None, replay_pause: float = 0.01) -> Reply:
         """Like `chat`, but calls `on_delta` with each piece of text as the model writes it.
@@ -241,7 +269,7 @@ class ChatClient:
                 if piece:
                     on_delta(piece)
                     time.sleep(pause)
-            return Reply(hit["text"], hit["usage"], self.model, True, 0.0)
+            return self._traced(Reply(hit["text"], hit["usage"], self.model, True, 0.0))
         est = self._budget(messages, payload)
         text, usage, finish, latency = self._stream(payload, est, on_delta)
         self.store.add(self.model, int(usage.get("total_tokens", est)))
@@ -250,7 +278,7 @@ class ChatClient:
         self.store.put(key, self.model, payload, {"text": text, "usage": usage})
         log.info("llm_stream", role=self.role, model=self.model, latency_s=round(latency, 2),
                  **{k: usage.get(k) for k in ("prompt_tokens", "completion_tokens")})
-        return Reply(text, usage, self.model, False, latency)
+        return self._traced(Reply(text, usage, self.model, False, latency))
 
     @retry(retry=retry_if_exception(_retryable), stop=stop_after_attempt(6),
            wait=wait_exponential(multiplier=4, min=5, max=90), reraise=True)

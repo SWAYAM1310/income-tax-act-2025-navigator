@@ -1,9 +1,22 @@
 import json
+import os
+import subprocess
+import sys
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
+from langsmith import Client
+from langsmith.run_helpers import get_current_run_tree, tracing_context
 
+from statnav.config import ROOT
 from statnav.llm.client import ChatClient, QuotaExhausted, _Window
+
+
+@pytest.fixture(autouse=True)
+def fresh_rate_window(monkeypatch):
+    """Each test gets its own limiter: the shared one would really wait out the minute."""
+    monkeypatch.setattr("statnav.llm.client._windows", {})
 
 
 def handler_factory(calls):
@@ -89,3 +102,68 @@ def test_a_call_larger_than_the_minute_window_is_let_through_when_it_is_empty():
     w = _Window(rpm=30, tpm=100)
     w.wait(500)  # used to sleep on an empty deque and raise IndexError
     assert [n for _, n in w.events] == [500]
+
+
+def traced_runs(call) -> list[dict]:
+    """Run `call` with tracing on against a mock LangSmith client: one merged dict per run."""
+    ls = MagicMock(spec=Client)
+    ls.tracing_sampling_rate = 1.0
+    with tracing_context(enabled=True, client=ls):
+        call()
+    runs: dict = {}
+    for c in ls.create_run.call_args_list:
+        runs[str(c.kwargs["id"])] = dict(c.kwargs)
+    for c in ls.update_run.call_args_list:
+        runs[str(c.kwargs["run_id"])].update({k: v for k, v in c.kwargs.items()
+                                              if v is not None})
+    return list(runs.values())
+
+
+def test_a_call_is_traced_with_model_and_tokens_and_a_cached_one_spends_none(tmp_path):
+    llm = ChatClient("answer", transport=httpx.MockTransport(handler_factory([])),
+                     store_path=tmp_path / "llm.sqlite")
+    msgs = [{"role": "user", "content": "hello"}]
+    llm.chat(msgs)
+    (first,) = traced_runs(lambda: llm.chat([{"role": "user", "content": "new"}]))
+    assert first["run_type"] == "llm" and first["inputs"]["messages"][0]["content"] == "new"
+    assert "self" not in first["inputs"]
+    meta = first["extra"]["metadata"]
+    assert meta["ls_provider"] == "groq" and meta["ls_model_name"] == llm.model
+    assert meta["cached"] is False and meta["role"] == "answer"
+    assert meta["usage_metadata"] == {"input_tokens": 20, "output_tokens": 5, "total_tokens": 25}
+    assert first["outputs"] == {"text": '{"answer": "ok"}'}
+
+    (again,) = traced_runs(lambda: llm.chat(msgs))
+    assert again["extra"]["metadata"]["cached"] is True
+    assert "usage_metadata" not in again["extra"]["metadata"]
+
+
+def test_a_stream_is_traced_without_its_callback(tmp_path):
+    llm = ChatClient("answer", transport=httpx.MockTransport(stream_handler([])),
+                     store_path=tmp_path / "llm.sqlite")
+    (run,) = traced_runs(lambda: llm.chat_stream([{"role": "user", "content": "x"}],
+                                                 lambda _: None))
+    assert run["name"] == "chat_stream" and set(run["inputs"]) == {"messages", "json_mode"}
+    assert run["extra"]["metadata"]["usage_metadata"]["total_tokens"] == 25
+
+
+def test_tracing_off_records_nothing(tmp_path):
+    ls = MagicMock(spec=Client)
+    llm = ChatClient("answer", transport=httpx.MockTransport(handler_factory([])),
+                     store_path=tmp_path / "llm.sqlite")
+    with tracing_context(enabled=False, client=ls):
+        assert llm.chat([{"role": "user", "content": "x"}]).text
+        assert get_current_run_tree() is None
+    ls.create_run.assert_not_called()
+
+
+@pytest.mark.parametrize(("module", "expected"), [("evals.run", "False"),
+                                                  ("statnav.api.app", "True")])
+def test_evals_never_trace_and_the_api_still_can(module, expected):
+    """In a new process, as importing `evals` changes the environment for good."""
+    code = (f"import {module}; from statnav.config import base_config; base_config(); "
+            "from langsmith.utils import tracing_is_enabled; print(tracing_is_enabled())")
+    env = {**os.environ, "LANGSMITH_TRACING": "true"}
+    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, text=True,
+                         capture_output=True, check=True)
+    assert out.stdout.strip().splitlines()[-1] == expected
