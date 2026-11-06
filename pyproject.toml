@@ -54,6 +54,7 @@ select = ["E", "F", "I", "B", "UP", "SIM"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "db: needs the Postgres container running",
     "jina: calls the Jina API (needs JINA_API_KEY)",

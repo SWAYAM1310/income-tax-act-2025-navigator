@@ -6,6 +6,7 @@ from evals.common import SPLITS_DIR, read_jsonl
 from evals.lay_lint import copied_run, problems
 from evals.splits import LAY
 from evals.splits import test_digest as digest
+from statnav.config import pdf_path
 
 
 def _q(question: str, **gold) -> dict:
@@ -14,6 +15,8 @@ def _q(question: str, **gold) -> dict:
 
 
 def test_lint_flags_named_provisions_and_quoted_terms():
+    if not pdf_path().exists():
+        pytest.skip("source PDF not present")
     assert problems(_q("Under section 393, what is the TDS rate on rent?"))
     assert problems(_q("What does Schedule III, Table Sl. No. 24 exempt?"))
     assert problems(_q("What is covered by clause (b) of the definition?"))
