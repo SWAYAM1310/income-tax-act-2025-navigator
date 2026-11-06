@@ -24,6 +24,8 @@ how to build. Nothing for the series goes in this repo.
 - Live check: CLI and `POST /query` traced with no errors; chat_stream run 3,124 + 1,466 tokens. 
 - Evals never trace: `evals/__init__.py` forces `LANGSMITH_TRACING=false` (forced because VS Code's `python.terminal.useEnvFile` puts `.env` in the shell). `.env.example` lists the vars. `tasks.py check`: 205 passed.
 
+- **CI, 2026-11-06:** the user asked to push `ci.yml`. It is committed locally as the one commit ahead of `origin/main`; the push is rejected until the user runs `gh auth refresh -h github.com -s workflow`, then `git push origin main`. The README CI badge is not back. Railway needs a manual redeploy for the new dependencies.
+
 ## Project in one paragraph
 This is a RAG system that answers questions about India's **Income-tax Act, 2025** (as amended by the Finance Act 2026) with exact section-level citations. It handles cross-references, tables (e.g. section 393 TDS rates) and the 2026 amendments, and refuses out-of-scope questions. It is a portfolio project for Forward Deployed Engineer roles. The headline deliverable is a **versioned eval ladder (v0 naive → v7 full agent)** showing measured improvements. The full plan is at `C:\Users\ASUS\.claude\plans\pasted-content-id-77ca-project-steady-lemon.md`, rev. 2.
 
