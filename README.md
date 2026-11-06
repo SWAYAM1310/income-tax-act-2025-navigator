@@ -6,10 +6,9 @@ definitions, the rate tables (TDS/TCS under sections 393 and 394), the 2026 amen
 questions that need two provisions linked by a cross-reference. It refuses questions the Act
 cannot answer (the Rules, forms, circulars, case law, the e-filing portal, personal advice).
 
-**Try it:** https://income-tax-act-2025-navigator.vercel.app. It runs on free tiers, so the
-first question after an idle spell waits a few seconds while the server wakes. Each visitor
-can ask 10 questions an hour. API docs:
-https://income-tax-act-2025-navigator-production.up.railway.app/docs.
+**Try it:** https://income-tax-act-2025-navigator.vercel.app. The backend runs on AWS free
+credits until May 2027, on a small server, so answers can take a few seconds to start. Each
+visitor can ask 10 questions an hour. API docs: https://13-210-57-137.sslip.io/docs.
 
 > **Not tax advice.** The system answers from the text of the Act only and can be wrong or
 > incomplete. Read the cited provision before relying on an answer.
@@ -230,33 +229,39 @@ python -m uv run python tasks.py check            # lint, database load, offline
 
 Every LLM reply and embedding is cached (`.cache/`), so re-running an eval costs nothing.
 
-### Deploy (free): Railway + Vercel
+### Deploy: AWS EC2 + Vercel
 
-The API and Postgres share one Railway service, built from
-[`deploy/railway.Dockerfile`](deploy/railway.Dockerfile) (selected by `railway.json`). The image
-restores the published index dump at build time, so the database needs no volume and no second
-service. The UI is a static Vite build on Vercel that calls the API directly.
+The API and Postgres share one Docker image, built from
+[`deploy/railway.Dockerfile`](deploy/railway.Dockerfile) (named after the host it was first
+written for; it runs on any Docker host). The image restores the published index dump at build
+time, so the database needs no volume and no second service. Caddy sits in front for HTTPS. The
+UI is a static Vite build on Vercel that calls the API directly.
 
-1. **Railway** (free plan, no card). New project, then deploy this GitHub repo.
-   - Turn on *Serverless* so the service sleeps after 10 idle minutes.
-   - Add a volume at `/app/.cache`, which keeps the Groq daily ledger and the answer cache.
-   - Variables:
+1. **EC2.** One `t3.micro` with Docker, 2 GB of swap, an Elastic IP, and only ports 80 and 443
+   open. Use `standard` CPU credits, so heavy use is throttled and does not add charges.
+   - Build the image on the server, or anywhere else and copy it over.
+   - Run it with a volume at `/app/.cache`, which keeps the Groq daily ledger and the answer
+     cache, and with these variables:
      - `GROQ_API_KEY`
      - `JINA_API_KEY`
      - `STATNAV_RATE_LIMIT=10` (questions per hour per visitor)
      - `STATNAV_CORS_ORIGINS=https://<your-app>.vercel.app`
-     - `PORT=8000` (must match the domain's target port; without it Railway assigns 8080
-       and the domain returns 502)
-   - Generate a public domain.
+     - `PORT=8000`
+   - Run Caddy with `reverse_proxy api:8000` for `<your-ip-with-dashes>.sslip.io`. It gets a
+     Let's Encrypt certificate by itself, and needs no domain of your own. The UI is served over
+     HTTPS, so browsers block calls to a plain `http://` API.
 2. **Vercel** (Hobby). Import the repo with root directory `frontend`.
-   - Set `VITE_API_BASE=https://<your-service>.up.railway.app`.
+   - Set `VITE_API_BASE=https://<your-ip-with-dashes>.sslip.io` as type *Config*, and redeploy
+     without the build cache, as Vite bakes it in at build time.
 
-What "free" means here:
-- Railway's free plan has $1 of credit a month and 0.5 GB of RAM per service. The service uses
-  about 180 MB, and it fits the credit only because it sleeps between visits.
-- The first visit after a pause wakes it, and the UI says so while it waits.
-- Without a card Railway cannot bill; if the credit runs out, the service stops until the next
-  month.
+What this costs:
+- In `ap-southeast-2`, about $14.83 a month: $9.64 for the server, $3.65 for the public IP and
+  $1.54 for 16 GB of storage. That is about $88 over the six months of an AWS Free plan with $100
+  of credit. A `t3.small` would use the credit up in about four months.
+- The Free plan closes the account when the six months end or the credit runs out, so this
+  deployment stops by itself and cannot bill. AWS then deletes it after 90 days.
+- The API uses about 200 MB of RAM. A build uses up the server's CPU credits and takes about 25
+  minutes; they recover while the server is idle.
 - Groq's free tier (about 200K tokens a day) is shared by every visitor; the per-visitor limit
   keeps one person from using it all.
 

@@ -9,6 +9,14 @@ The user is learning how the finished project works, one topic and one PDF at a 
 context file: **`E:\Tax-project-learning\context.md`**. Read that for status, the user's format rules and
 how to build. Nothing for the series goes in this repo.
 
+## AWS backend (2026-11-06)
+- **Live, replacing Railway:** https://13-210-57-137.sslip.io (`/health`). Frontend stays on Vercel. **Remaining (user): in Vercel account/team `swayam-e122`, project `income-tax-act-2025-navigator`, set `VITE_API_BASE` to that URL (type Config, not Secret) and redeploy without the build cache.** Our Vercel connector is a different account and cannot see that project. Until then the site still calls Railway. Then turn Railway off.
+- **Account ends itself:** Free plan, $100 credits, expires 2027-05-06, then closes (90 days to data deletion). Never upgrade to Paid. Member of an AWS Organization whose policy blocks other regions (ap-south-1 denied), so region is `ap-southeast-2`. Sign in with `aws login --region ap-southeast-2`.
+- `t3.micro`, `standard` CPU credits (throttles, no surplus charges), 16 GB gp3, Elastic IP: `i-08fc65bbd1692baf7`, `sg-0655cfad7a98e70cd`, `13.210.57.137`. ~$14.83/month, ~$88 over 6 months; `t3.small` (~$147) would run out of credits in ~4 months.
+- On the server: `/srv/taxlens/{api.env (600),Caddyfile,up.sh}`; containers `api` (image `statnav-api`, built from `deploy/railway.Dockerfile` in `/opt/taxlens`) and `caddy` (Let's Encrypt, HTTP -> HTTPS), restart unless-stopped, volumes `statnav-cache`, `caddy-data`. 2 GB swap. Only the Groq and Jina keys are there, so the live site is untraced. `STATNAV_RATE_LIMIT=10`, CORS = the Vercel origin.
+- **SSH is closed.** To redeploy: add port 22 from your IP to the security group, `ssh -i ~/.ssh/taxlens-aws.pem ubuntu@13.210.57.137`, `git pull` in `/opt/taxlens`, `sudo docker build -f deploy/railway.Dockerfile -t statnav-api .`, `sudo /srv/taxlens/up.sh`, then close port 22. A build uses up the CPU credits and takes ~25 minutes.
+- Checks: real question over HTTPS (s393 rows cited), full reboot recovery, CORS allows only the Vercel origin. Key file note: the AWS CLI writes key files with no final newline, which ssh rejects.
+
 ## LangSmith tracing (2026-11-06)
 - Local only so far: the `LANGSMITH_*` vars are in `.env` (agent id `taxlens`, environment `local`), so traces land in project `taxlens-local`. They are not on Railway, so the live site is untraced; adding them would send visitors' questions to LangSmith (user's call).
 - `llm/client.py`: `chat` and `chat_stream` are `@traceable` LLM runs; `_traced` records model, role, cached and real token use (a cached reply reports none); `_trace_inputs` keeps `self` and the callback out of traces. `tests/conftest.py` forces `LANGSMITH_TRACING=false`.
